@@ -177,3 +177,174 @@ class Shipment(Base):
     )
 
     order = relationship("Order", back_populates="shipments")
+
+
+class ReturnEvent(Base):
+    """Customer return request or physical return receipt event."""
+
+    __tablename__ = "return_events"
+
+    id = Column(String(64), primary_key=True)
+    order_id = Column(String(64), ForeignKey("orders.id"), nullable=False)
+    reason = Column(String(128), nullable=False)
+    status = Column(String(32), nullable=False)  # 'requested', 'received', 'inspected'
+    received_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.UTC),
+        nullable=False,
+    )
+
+    order = relationship("Order")
+
+
+class Refund(Base):
+    """Refund transaction record."""
+
+    __tablename__ = "refunds"
+
+    id = Column(String(64), primary_key=True)
+    payment_id = Column(String(64), ForeignKey("payments.id"), nullable=False)
+    amount = Column(Numeric(12, 2), nullable=False)
+    currency = Column(String(3), default="INR", nullable=False)
+    status = Column(String(32), nullable=False)  # 'pending', 'completed', 'failed'
+    paypal_refund_id = Column(String(128), nullable=True, index=True)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.UTC),
+        nullable=False,
+    )
+
+    payment = relationship("Payment")
+
+
+class PaymentEvent(Base):
+    """Raw verified PayPal webhook events stored idempotently."""
+
+    __tablename__ = "payment_events"
+
+    id = Column(String(64), primary_key=True)
+    event_id = Column(String(128), unique=True, nullable=False, index=True)
+    event_type = Column(String(128), nullable=False)
+    summary = Column(String(255), nullable=True)
+    resource_type = Column(String(64), nullable=True)
+    payload_json = Column(Text, nullable=False)
+    received_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.UTC),
+        nullable=False,
+    )
+    status = Column(String(32), default="processed", nullable=False)
+
+
+class Dispute(Base):
+    """Payment dispute record from PayPal Disputes API."""
+
+    __tablename__ = "disputes"
+
+    id = Column(String(64), primary_key=True)
+    payment_id = Column(String(64), ForeignKey("payments.id"), nullable=False)
+    paypal_dispute_id = Column(String(128), unique=True, nullable=True, index=True)
+    reason = Column(String(128), nullable=False)
+    status = Column(String(64), nullable=False)  # 'WAITING_FOR_SELLER_RESPONSE', etc.
+    amount = Column(Numeric(12, 2), nullable=False)
+    currency = Column(String(3), default="INR", nullable=False)
+    evidences_requested_json = Column(Text, nullable=True)
+    dispute_life_cycle_stage = Column(String(64), nullable=True)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.UTC),
+        nullable=False,
+    )
+
+    payment = relationship("Payment")
+    evidence_packs = relationship("EvidencePack", back_populates="dispute")
+
+
+class EvidencePack(Base):
+    """Evidence pack mapped to PayPal dispute evidence requirements."""
+
+    __tablename__ = "evidence_packs"
+
+    id = Column(String(64), primary_key=True)
+    dispute_id = Column(String(64), ForeignKey("disputes.id"), nullable=False)
+    pack_hash = Column(String(128), nullable=False)
+    completeness_pct = Column(Numeric(5, 2), nullable=False)
+    win_likelihood = Column(Numeric(5, 2), nullable=False)
+    sections_json = Column(Text, nullable=False)
+    status = Column(String(32), default="draft", nullable=False)  # 'draft', 'approved'
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.UTC),
+        nullable=False,
+    )
+
+    dispute = relationship("Dispute", back_populates="evidence_packs")
+    submissions = relationship("EvidenceSubmission", back_populates="evidence_pack")
+
+
+class EvidenceSubmission(Base):
+    """Dispute evidence submission event record."""
+
+    __tablename__ = "evidence_submissions"
+
+    id = Column(String(64), primary_key=True)
+    evidence_pack_id = Column(
+        String(64), ForeignKey("evidence_packs.id"), nullable=False
+    )
+    paypal_dispute_id = Column(String(128), nullable=False)
+    status = Column(String(32), nullable=False)  # 'submitted', 'accepted', 'rejected'
+    response_payload = Column(Text, nullable=True)
+    submitted_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.UTC),
+        nullable=False,
+    )
+
+    evidence_pack = relationship("EvidencePack", back_populates="submissions")
+
+
+class MerchantAudit(Base):
+    """Immutable audit log for merchant actions and assistant operations."""
+
+    __tablename__ = "merchant_audits"
+
+    id = Column(String(64), primary_key=True)
+    merchant_id = Column(String(64), ForeignKey("merchants.id"), nullable=False)
+    action = Column(String(64), nullable=False)
+    entity_type = Column(String(64), nullable=False)
+    entity_id = Column(String(64), nullable=False)
+    actor = Column(String(64), nullable=False)  # merchant user or system/assistant
+    details_json = Column(Text, nullable=True)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.UTC),
+        nullable=False,
+    )
+
+    merchant = relationship("Merchant")
+
+
+class AuditScoreEvent(Base):
+    """Immutable record of online risk scores and soft policy decisions."""
+
+    __tablename__ = "audit_score_events"
+
+    id = Column(String(64), primary_key=True)
+    order_id = Column(String(64), ForeignKey("orders.id"), nullable=False)
+    channel = Column(String(32), nullable=False)
+    risk_score = Column(Numeric(6, 4), nullable=False)
+    severity = Column(String(32), nullable=False)
+    suggested_action = Column(String(32), nullable=False)
+    reason_codes_json = Column(Text, nullable=False)
+    rule_hits_json = Column(Text, nullable=False)
+    ring_id = Column(String(64), nullable=True)
+    shadow = Column(Integer, default=1, nullable=False)  # 1 for true, 0 for false
+    model_version = Column(String(64), nullable=False)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.UTC),
+        nullable=False,
+    )
+
+    order = relationship("Order")
