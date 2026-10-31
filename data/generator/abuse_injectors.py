@@ -158,6 +158,8 @@ def inject_address_farm_ring(
                 ip_address="103.21.244.15",
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/124.0.0.0 Safari/537.36",
             )
+            addresses.append(cust_addr)
+            devices.append(cust_dev)
 
             # Each member places 2-3 orders
             for ord_step in range(int(rng.integers(2, 4))):

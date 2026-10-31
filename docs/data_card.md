@@ -8,9 +8,9 @@
 
 - **Generator Version**: `1.0.0`
 - **Random Seed**: `42`
-- **Generated At**: `2026-10-31T22:49:42.113603+00:00`
+- **Generated At**: `2026-10-31T23:36:00.926171+00:00`
 - **Total Simulated Orders**: `4,295`
-- **Feature Count**: `31` (excluding metadata columns: `order_id`, `customer_id`, `order_time`)
+- **Feature Count**: `30` (excluding metadata columns: `order_id`, `customer_id`, `order_time`)
 - **Total Customer Accounts**: `1,000`
 - **Pure Held-Out Customers**: `150` (15.0% of all customer accounts)
 
@@ -67,9 +67,9 @@ All files stored under `data/processed/` (gitignored):
 
 | File | SHA-256 Checksum |
 |---|---|
-| `train.parquet` | `23198427d5892e782ac58ad4dcd8a5a5f5aac3427db2c49b66d290a4aec1f656` |
-| `train_labels.parquet` | `3f0e12b028da05692d8a90aa6ea10eedbb842a07ef88fce38c9c0df2ce564d9c` |
-| `val.parquet` | `97348ff3ff7463aa9f3ff4bfa19a633b9353ed8b1f482c4bb0d7e327502b3057` |
-| `val_labels.parquet` | `70ca0513cde29f37df712c30cf5de20af62486a4e0542203f3d9f5dc8dfa5a7b` |
-| `test.parquet` | `000746946f869caa11fb09b62b6366f86eeb3fa1d1acc12be3a93e7cb5fde2ce` |
-| `test_labels.parquet` | `6da8b52210bee8955d28806234173002d09cfaa06dd2d662da67018c95f8d21c` |
+| `train.parquet` | `72042b7f0d77b7e914d7386e48dee5df834cff7fd9d51835dfe28da21aabaf30` |
+| `train_labels.parquet` | `2d76b5b972b6b19d929734d67a442c292f6be25cc2cfe49507e5f49a89127147` |
+| `val.parquet` | `4ed5a7a684d4805b6964d74e53130c355b362be1081d4ba574691c405ef26913` |
+| `val_labels.parquet` | `dac4bc5d4516641b3893a989c8575bd14ac099298a1b701271a742c5ad36cebd` |
+| `test.parquet` | `07537a131778850cc71362c87a72747c27a27d199e8570e77c76758d9f09c1a7` |
+| `test_labels.parquet` | `bbd9d9d67b0e2ecb0d90d585504691f40a3f45d4fad223afcc2c511a2d7b22a0` |
