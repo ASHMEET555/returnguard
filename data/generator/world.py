@@ -109,6 +109,16 @@ USER_AGENTS = [
     "Mozilla/5.0 (Linux; Android 14; SM-S918B) Chrome/123.0.6312.118 Mobile Safari/537.36",
 ]
 
+CATEGORIES = [
+    {"name": "Apparel", "base_risk": 0.28, "aov_mean": 1400.0, "aov_std": 500.0},
+    {"name": "Footwear", "base_risk": 0.25, "aov_mean": 1800.0, "aov_std": 600.0},
+    {"name": "Beauty", "base_risk": 0.12, "aov_mean": 850.0, "aov_std": 300.0},
+    {"name": "Electronics", "base_risk": 0.08, "aov_mean": 3200.0, "aov_std": 1200.0},
+    {"name": "Home", "base_risk": 0.15, "aov_mean": 1600.0, "aov_std": 700.0},
+]
+
+CARRIERS = ["BlueDart", "Delhivery", "Shadowfax", "Ekart", "DTDC"]
+
 
 @dataclass
 class SyntheticMerchant:
@@ -150,6 +160,258 @@ class SyntheticDevice:
     device_hash: str
     ip_address: str
     user_agent: str
+
+
+@dataclass
+class SyntheticOrder:
+    id: str
+    merchant_id: str
+    customer_id: str
+    address_id: str
+    device_id: str
+    channel: str  # 'cod' | 'paypal'
+    is_cod: int
+    order_value: float
+    item_count: int
+    category: str
+    category_risk: float
+    checkout_speed_sec: float
+    order_time: datetime.datetime
+
+
+@dataclass
+class SyntheticPayment:
+    id: str
+    order_id: str
+    channel: str
+    amount: float
+    payment_authorized: int
+    payment_captured: int
+    order_to_payment_ratio: float
+    status: str
+    paypal_order_id: str | None
+
+
+@dataclass
+class SyntheticShipment:
+    id: str
+    order_id: str
+    carrier: str
+    tracking_number: str
+    status: str
+    shipped_at: datetime.datetime
+    delivered_at: datetime.datetime | None
+    rto_initiated_at: datetime.datetime | None
+
+
+@dataclass
+class SyntheticLabel:
+    order_id: str
+    channel: str
+    y: int  # 1 for abuse, 0 for clean
+    outcome_type: str  # 'delivered_clean', 'rto', 'refund_abusive', etc.
+    outcome_time: datetime.datetime
+    label_delay_days: int
+
+
+def simulate_order_shipment_and_label(
+    rng: np.random.Generator,
+    order: SyntheticOrder,
+    is_abuse: bool,
+    abuse_type: str | None = None,
+) -> tuple[SyntheticPayment, SyntheticShipment, SyntheticLabel]:
+    """Simulate payment lifecycle, logistics shipment, and label outcome with delay."""
+    # Payment simulation
+    pay_id = f"pay_{order.id[4:]}"
+    paypal_ord_id = f"PAYPAL-ORD-{order.id[4:]}" if order.channel == "paypal" else None
+
+    if order.channel == "paypal":
+        pay_auth = 1
+        pay_capt = 1
+        pay_status = "captured"
+    else:
+        pay_auth = 0
+        pay_capt = 0
+        pay_status = "pending"
+
+    payment = SyntheticPayment(
+        id=pay_id,
+        order_id=order.id,
+        channel=order.channel,
+        amount=order.order_value,
+        payment_authorized=pay_auth,
+        payment_captured=pay_capt,
+        order_to_payment_ratio=1.0,
+        status=pay_status,
+        paypal_order_id=paypal_ord_id,
+    )
+
+    # Shipment simulation
+    ship_id = f"ship_{order.id[4:]}"
+    carrier = str(rng.choice(CARRIERS))
+    track_num = f"{carrier[:2].upper()}{rng.integers(1000000000, 9999999999)}"
+
+    # Transit time: 2 to 5 days
+    transit_days = int(rng.integers(2, 6))
+    shipped_at = order.order_time + datetime.timedelta(hours=int(rng.integers(6, 24)))
+
+    # Label delay: 3 to 7 days
+    label_delay_days = int(rng.integers(3, 8))
+
+    if order.channel == "cod":
+        if is_abuse:
+            # Abusive COD = RTO (delivery refused / customer unreachable)
+            status = "rto_delivered"
+            delivered_at = None
+            rto_initiated_at = shipped_at + datetime.timedelta(days=transit_days)
+            outcome_time = rto_initiated_at + datetime.timedelta(days=label_delay_days)
+            outcome_type = abuse_type or "rto"
+            y = 1
+        else:
+            # Genuine delivery
+            status = "delivered"
+            delivered_at = shipped_at + datetime.timedelta(days=transit_days)
+            rto_initiated_at = None
+            outcome_time = delivered_at + datetime.timedelta(days=label_delay_days)
+            outcome_type = "delivered_clean"
+            y = 0
+    else:
+        # PayPal channel (prepaid)
+        status = "delivered"
+        delivered_at = shipped_at + datetime.timedelta(days=transit_days)
+        rto_initiated_at = None
+        outcome_time = delivered_at + datetime.timedelta(days=label_delay_days)
+
+        if is_abuse:
+            outcome_type = abuse_type or "refund_abusive"
+            y = 1
+        else:
+            outcome_type = "delivered_clean"
+            y = 0
+
+    shipment = SyntheticShipment(
+        id=ship_id,
+        order_id=order.id,
+        carrier=carrier,
+        tracking_number=track_num,
+        status=status,
+        shipped_at=shipped_at,
+        delivered_at=delivered_at,
+        rto_initiated_at=rto_initiated_at,
+    )
+
+    label = SyntheticLabel(
+        order_id=order.id,
+        channel=order.channel,
+        y=y,
+        outcome_type=outcome_type,
+        outcome_time=outcome_time,
+        label_delay_days=label_delay_days,
+    )
+
+    return payment, shipment, label
+
+
+def generate_baseline_orders(
+    rng: np.random.Generator,
+    merchant_id: str,
+    customers: list[SyntheticCustomer],
+    addresses: list[SyntheticAddress],
+    devices: list[SyntheticDevice],
+    n_orders: int = 3500,
+    start_date: datetime.datetime = datetime.datetime(2026, 1, 1, tzinfo=datetime.UTC),
+    end_date: datetime.datetime = datetime.datetime(2026, 6, 30, tzinfo=datetime.UTC),
+) -> tuple[
+    list[SyntheticOrder],
+    list[SyntheticPayment],
+    list[SyntheticShipment],
+    list[SyntheticLabel],
+]:
+    """Generate baseline legitimate orders and fulfillment across COD and PayPal."""
+    cust_map = {c.id: c for c in customers}
+    addr_map = {a.customer_id: a for a in addresses}
+    dev_map = {d.customer_id: d for d in devices}
+
+    orders = []
+    payments = []
+    shipments = []
+    labels = []
+
+    total_span_seconds = int((end_date - start_date).total_seconds())
+
+    # Customer order counts following a power-law distribution
+    cust_ids = [c.id for c in customers]
+    weights = 1.0 / (np.arange(1, len(customers) + 1) ** 0.8)
+    weights /= weights.sum()
+
+    for i in range(n_orders):
+        order_id = f"ord_{i + 1:06d}"
+        c_id = str(rng.choice(cust_ids, p=weights))
+        cust = cust_map[c_id]
+        addr = addr_map[c_id]
+        dev = dev_map[c_id]
+
+        # Order timestamp
+        sec_offset = int(rng.integers(0, total_span_seconds))
+        ord_time = start_date + datetime.timedelta(seconds=sec_offset)
+        # Ensure order_time is after customer registration
+        if ord_time < cust.created_at:
+            ord_time = cust.created_at + datetime.timedelta(
+                hours=int(rng.integers(1, 48))
+            )
+
+        # Channel selection: 55% COD, 45% PayPal
+        channel = "cod" if rng.random() < 0.55 else "paypal"
+        is_cod = 1 if channel == "cod" else 0
+
+        # Category and value
+        cat = rng.choice(CATEGORIES)
+        aov = max(250.0, float(rng.normal(cat["aov_mean"], cat["aov_std"])))
+        order_value = round(aov, 2)
+        item_count = int(rng.integers(1, 4))
+
+        # Checkout speed: typical 45 to 300 seconds
+        checkout_speed_sec = round(float(rng.uniform(45.0, 300.0)), 1)
+
+        order = SyntheticOrder(
+            id=order_id,
+            merchant_id=merchant_id,
+            customer_id=c_id,
+            address_id=addr.id,
+            device_id=dev.id,
+            channel=channel,
+            is_cod=is_cod,
+            order_value=order_value,
+            item_count=item_count,
+            category=cat["name"],
+            category_risk=cat["base_risk"],
+            checkout_speed_sec=checkout_speed_sec,
+            order_time=ord_time,
+        )
+
+        # Baseline outcomes:
+        # Legitimate COD has small chance of natural courier RTO (delivery failure)
+        # Legitimate PayPal has almost zero natural abuse (clean delivery)
+        if channel == "cod":
+            # Natural RTO based on pincode rate (~12-35%)
+            is_natural_rto = rng.random() < (addr.base_rto_rate * 0.7)
+            pay, ship, lbl = simulate_order_shipment_and_label(
+                rng,
+                order,
+                is_abuse=is_natural_rto,
+                abuse_type="rto" if is_natural_rto else None,
+            )
+        else:
+            pay, ship, lbl = simulate_order_shipment_and_label(
+                rng, order, is_abuse=False
+            )
+
+        orders.append(order)
+        payments.append(pay)
+        shipments.append(ship)
+        labels.append(lbl)
+
+    return orders, payments, shipments, labels
 
 
 def generate_merchants(rng: np.random.Generator, n: int = 1) -> list[SyntheticMerchant]:
