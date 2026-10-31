@@ -8,8 +8,8 @@
 
 - **Generator Version**: `1.0.0`
 - **Random Seed**: `42`
-- **Generated At**: `2026-10-31T23:36:00.926171+00:00`
-- **Total Simulated Orders**: `4,295`
+- **Generated At**: `2026-10-31T23:39:50.715553+00:00`
+- **Total Simulated Orders**: `4,291`
 - **Feature Count**: `30` (excluding metadata columns: `order_id`, `customer_id`, `order_time`)
 - **Total Customer Accounts**: `1,000`
 - **Pure Held-Out Customers**: `150` (15.0% of all customer accounts)
@@ -22,14 +22,14 @@ Data is split chronologically by `order_time`, with the final evaluation set aug
 
 | Split | Row Count | % of Total | Min Order Time | Max Order Time | Unique Customers |
 |---|---|---|---|---|---|
-| **Train** | `2,605` | `60.7%` | `2026-01-04T10:45:33+00:00` | `2026-05-31T03:30:28+00:00` | `608` |
-| **Validation** | `558` | `13.0%` | `2026-05-31T05:00:00+00:00` | `2026-06-15T11:00:00+00:00` | `194` |
-| **Test (Holdout)** | `1,132` | `26.4%` | `2026-01-05T01:00:00+00:00` | `2026-08-01T09:00:00+00:00` | `324` |
-| **Total** | `4,295` | `100.0%` | `2026-01-04T10:45:33+00:00` | `2026-08-01T09:00:00+00:00` | `1,000` |
+| **Train** | `2,592` | `60.4%` | `2026-01-04T10:45:33+00:00` | `2026-05-31T05:00:00+00:00` | `598` |
+| **Validation** | `555` | `12.9%` | `2026-05-31T05:31:02+00:00` | `2026-06-15T14:00:00+00:00` | `193` |
+| **Test (Holdout)** | `1,144` | `26.7%` | `2026-01-05T02:00:00+00:00` | `2026-08-03T07:00:00+00:00` | `327` |
+| **Total** | `4,291` | `100.0%` | `2026-01-04T10:45:33+00:00` | `2026-08-03T07:00:00+00:00` | `1,000` |
 
 ### Split Cutoff Timestamps
-- **T0 (Train End)**: `2026-05-31T03:30:28+00:00`
-- **T1 (Val End / Test Start)**: `2026-06-15T11:00:00+00:00`
+- **T0 (Train End)**: `2026-05-31T05:00:00+00:00`
+- **T1 (Val End / Test Start)**: `2026-06-15T14:00:00+00:00`
 
 ---
 
@@ -41,9 +41,9 @@ Label definition (`y = 1`):
 
 | Split | Overall Positive Rate | COD Positive Rate | PayPal Positive Rate | COD Order Share |
 |---|---|---|---|---|
-| **Train** | `23.92%` | `38.10%` | `7.26%` | `54.0%` |
-| **Validation** | `11.11%` | `17.26%` | `3.59%` | `55.0%` |
-| **Test** | `19.52%` | `30.88%` | `4.86%` | `56.4%` |
+| **Train** | `23.96%` | `38.13%` | `6.82%` | `54.7%` |
+| **Validation** | `9.55%` | `15.23%` | `2.77%` | `54.4%` |
+| **Test** | `19.49%` | `29.82%` | `6.96%` | `54.8%` |
 
 ---
 
@@ -51,13 +51,13 @@ Label definition (`y = 1`):
 
 | Outcome Type | Description | Total Count | % of Dataset |
 |---|---|---|---|
-| `delivered_clean` | Delivered clean | `3,389` | `78.91%` |
+| `delivered_clean` | Delivered clean | `3,394` | `79.10%` |
 | `rto` | Rto | `261` | `6.08%` |
-| `rto_spike` | Rto spike | `177` | `4.12%` |
-| `rto_serial` | Rto serial | `176` | `4.10%` |
-| `rto_ring` | Rto ring | `132` | `3.07%` |
-| `paypal_refund_abuse` | Paypal refund abuse | `120` | `2.79%` |
-| `rto_high_value` | Rto high value | `40` | `0.93%` |
+| `rto_serial` | Rto serial | `175` | `4.08%` |
+| `rto_spike` | Rto spike | `165` | `3.85%` |
+| `rto_ring` | Rto ring | `134` | `3.12%` |
+| `paypal_refund_abuse` | Paypal refund abuse | `123` | `2.87%` |
+| `rto_high_value` | Rto high value | `39` | `0.91%` |
 
 ---
 
@@ -67,9 +67,9 @@ All files stored under `data/processed/` (gitignored):
 
 | File | SHA-256 Checksum |
 |---|---|
-| `train.parquet` | `72042b7f0d77b7e914d7386e48dee5df834cff7fd9d51835dfe28da21aabaf30` |
-| `train_labels.parquet` | `2d76b5b972b6b19d929734d67a442c292f6be25cc2cfe49507e5f49a89127147` |
-| `val.parquet` | `4ed5a7a684d4805b6964d74e53130c355b362be1081d4ba574691c405ef26913` |
-| `val_labels.parquet` | `dac4bc5d4516641b3893a989c8575bd14ac099298a1b701271a742c5ad36cebd` |
-| `test.parquet` | `07537a131778850cc71362c87a72747c27a27d199e8570e77c76758d9f09c1a7` |
-| `test_labels.parquet` | `bbd9d9d67b0e2ecb0d90d585504691f40a3f45d4fad223afcc2c511a2d7b22a0` |
+| `train.parquet` | `833778c8a50b2fb3789a1cb31663e791d590b531237282e1e6a3d3c40e0e80bf` |
+| `train_labels.parquet` | `0460d7ef85bdb1f0f952b12020da384db170291a9841a229fdcc5a5fc576ca7f` |
+| `val.parquet` | `5a6a9d95e4aa4a269f3603bb5f07fe21e55ec37e1ab74c669afea72e37d8b851` |
+| `val_labels.parquet` | `af54c781bdcd10d7c7801db57d1a693b6b06c62cb9695dffec3a466d3c7e4d11` |
+| `test.parquet` | `795f2b5beed48129b8edd181e57ea04a52eeb2a9d2bdf92d862110fa003f299b` |
+| `test_labels.parquet` | `284d2a36936a7c0d3f549bc6e0e61040145649df29520b67dc3a7df832c141ce` |
