@@ -2,7 +2,7 @@
 
 import random
 
-from rings.builder import RingBuilder, UnionFind
+from rings.builder import RingBuilder, RingMembershipStore, UnionFind
 
 
 def test_shared_address_ring_size_3_discovered():
@@ -108,3 +108,40 @@ def test_union_find_primitive_operations():
     components = uf.get_components()
     assert len(components) == 1
     assert next(iter(components.values())) == ["a", "b", "c", "d"]
+
+
+def test_ring_aggregates_and_membership_store(tmp_path):
+    """Verify per-ring aggregates (ring_size, ring_return_rate) and O(1) store lookup."""
+    links = [
+        {"customer_id": "cust_m1", "address_hash": "cluster_address_1"},
+        {"customer_id": "cust_m2", "address_hash": "cluster_address_1"},
+        {"customer_id": "cust_m3", "address_hash": "cluster_address_1"},
+    ]
+    historical_orders = [
+        {"customer_id": "cust_m1", "y": 1, "outcome_time": "2026-02-01T10:00:00Z"},
+        {"customer_id": "cust_m1", "y": 0, "outcome_time": "2026-02-02T10:00:00Z"},
+        {"customer_id": "cust_m2", "y": 1, "outcome_time": "2026-02-03T10:00:00Z"},
+        {"customer_id": "cust_m3", "y": 1, "outcome_time": "2026-02-04T10:00:00Z"},
+    ]
+    builder = RingBuilder(min_ring_size=3)
+    store = builder.create_membership_store(links, historical_orders=historical_orders)
+
+    # 3 out of 4 orders are returns (y=1) -> 0.75
+    res_m1 = store.lookup("cust_m1")
+    assert res_m1["in_ring"] is True
+    assert res_m1["ring_id"] == "R01"
+    assert res_m1["ring_size"] == 3
+    assert res_m1["ring_return_rate"] == 0.75
+
+    # Non-ring customer lookup returns defaults
+    res_outside = store.lookup("cust_outside", default_return_rate=0.12)
+    assert res_outside["in_ring"] is False
+    assert res_outside["ring_id"] is None
+    assert res_outside["ring_size"] == 1
+    assert res_outside["ring_return_rate"] == 0.12
+
+    # Test file persistence
+    save_path = tmp_path / "rings.json"
+    store.save(save_path)
+    loaded_store = RingMembershipStore.load(save_path)
+    assert loaded_store.lookup("cust_m2") == res_m1
