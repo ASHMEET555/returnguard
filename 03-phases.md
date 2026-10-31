@@ -10,19 +10,19 @@ Do **one phase at a time**. Tick exit criteria before moving on. Phase **C** is 
 
 ### Build checklist
 
-- [ ] Repo `returnguard` scaffold: FastAPI, PostgreSQL, `requirements.txt`, `.env.example`, `LICENSE`
-- [ ] Copy defense pledge into README
-- [ ] `features/dictionary.yaml` from [02-architecture.md](02-architecture.md)
-- [ ] Schema: order, payment, payment_event, dispute, evidence_pack, evidence_submission, merchant_audit
-- [ ] `docs/fp_cost_assumptions.md` with ₹ constants (COD and PayPal)
-- [ ] `data/generator/`: synthetic COD and PayPal world, 7 abuse archetypes
-- [ ] Fixed seed → `train.parquet` / `val.parquet` / `test.parquet`
-- [ ] Data card: row counts, positive rate per channel, split dates, held-out customer count
+- [x] Repo `returnguard` scaffold: FastAPI, PostgreSQL, `requirements.txt`, `.env.example`, `LICENSE`
+- [x] Copy defense pledge into README
+- [x] `features/dictionary.yaml` from [02-architecture.md](02-architecture.md)
+- [x] Schema: order, payment, payment_event, dispute, evidence_pack, evidence_submission, merchant_audit
+- [x] `docs/fp_cost_assumptions.md` with ₹ constants (COD and PayPal)
+- [x] `data/generator/`: synthetic COD and PayPal world, 7 abuse archetypes
+- [x] Fixed seed → `train.parquet` / `val.parquet` / `test.parquet`
+- [x] Data card: row counts, positive rate per channel, split dates, held-out customer count
 
 ### Exit criteria
 
-- [ ] Re-run generator with the same seed → identical holdout IDs
-- [ ] Feature files have **no** future-leakage columns
+- [x] Re-run generator with the same seed → identical holdout IDs
+- [x] Feature files have **no** future-leakage columns
 
 **Next:** Phase B
 
