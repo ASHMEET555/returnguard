@@ -428,3 +428,150 @@ def inject_clean_loyal_prepaid(
             labels.append(lbl)
 
     return orders, payments, shipments, labels, current_idx
+
+
+def inject_paypal_refund_after_delivery(
+    rng: np.random.Generator,
+    merchant_id: str,
+    customers: list[SyntheticCustomer],
+    addresses: list[SyntheticAddress],
+    devices: list[SyntheticDevice],
+    start_order_idx: int,
+    n_abusers: int = 35,
+    orders_per_abuser: int = 4,
+    start_date: datetime.datetime = datetime.datetime(2026, 2, 1, tzinfo=datetime.UTC),
+) -> tuple[
+    list[SyntheticOrder],
+    list[SyntheticPayment],
+    list[SyntheticShipment],
+    list[SyntheticLabel],
+    int,
+]:
+    """Archetype 6: PayPal refund-after-delivery repeat.
+
+    Customer orders via PayPal sandbox, order is fulfilled and delivered with tracking proof,
+    but buyer repeatedly files refund requests or fraudulent claims without returning the physical item (y=1).
+    """
+    addr_map = {a.customer_id: a for a in addresses}
+    dev_map = {d.customer_id: d for d in devices}
+
+    abuser_custs = rng.choice(customers[600:800], size=n_abusers, replace=False)
+    orders, payments, shipments, labels = [], [], [], []
+    current_idx = start_order_idx
+
+    for cust in abuser_custs:
+        addr = addr_map[cust.id]
+        dev = dev_map[cust.id]
+        base_time = max(cust.created_at, start_date)
+
+        for step in range(orders_per_abuser):
+            current_idx += 1
+            ord_id = f"ord_{current_idx:06d}"
+            ord_time = base_time + datetime.timedelta(
+                days=step * int(rng.integers(7, 18)),
+                hours=int(rng.integers(1, 14)),
+            )
+
+            cat = rng.choice(CATEGORIES)
+            val = round(
+                max(600.0, float(rng.normal(cat["aov_mean"], cat["aov_std"]))), 2
+            )
+
+            order = SyntheticOrder(
+                id=ord_id,
+                merchant_id=merchant_id,
+                customer_id=cust.id,
+                address_id=addr.id,
+                device_id=dev.id,
+                channel="paypal",
+                is_cod=0,
+                order_value=val,
+                item_count=int(rng.integers(1, 4)),
+                category=cat["name"],
+                category_risk=cat["base_risk"],
+                checkout_speed_sec=round(float(rng.uniform(30.0, 120.0)), 1),
+                order_time=ord_time,
+            )
+
+            # 85% abuse rate, 15% overlap/clean to preserve realistic variance
+            is_abuse = rng.random() < 0.85
+            pay, ship, lbl = simulate_order_shipment_and_label(
+                rng,
+                order,
+                is_abuse=is_abuse,
+                abuse_type="paypal_refund_abuse" if is_abuse else None,
+            )
+
+            orders.append(order)
+            payments.append(pay)
+            shipments.append(ship)
+            labels.append(lbl)
+
+    return orders, payments, shipments, labels, current_idx
+
+
+def inject_paypal_dispute_legit_control(
+    rng: np.random.Generator,
+    merchant_id: str,
+    customers: list[SyntheticCustomer],
+    addresses: list[SyntheticAddress],
+    devices: list[SyntheticDevice],
+    start_order_idx: int,
+    n_orders: int = 40,
+    start_date: datetime.datetime = datetime.datetime(2026, 2, 15, tzinfo=datetime.UTC),
+) -> tuple[
+    list[SyntheticOrder],
+    list[SyntheticPayment],
+    list[SyntheticShipment],
+    list[SyntheticLabel],
+    int,
+]:
+    """Archetype 7 (Negative Control): PayPal dispute on legitimate delivered order.
+
+    Normal buyer opens an informational inquiry (e.g., inquiry on sizing or billing query)
+    that resolves without fraud or abusive chargeback. Genuine customer, y=0.
+    """
+    addr_map = {a.customer_id: a for a in addresses}
+    dev_map = {d.customer_id: d for d in devices}
+
+    legit_custs = rng.choice(customers[800:1000], size=n_orders, replace=False)
+    orders, payments, shipments, labels = [], [], [], []
+    current_idx = start_order_idx
+
+    for cust in legit_custs:
+        current_idx += 1
+        ord_id = f"ord_{current_idx:06d}"
+        addr = addr_map[cust.id]
+        dev = dev_map[cust.id]
+        ord_time = start_date + datetime.timedelta(days=int(rng.integers(0, 100)))
+
+        cat = rng.choice(CATEGORIES)
+        val = round(max(500.0, float(rng.normal(cat["aov_mean"], cat["aov_std"]))), 2)
+
+        order = SyntheticOrder(
+            id=ord_id,
+            merchant_id=merchant_id,
+            customer_id=cust.id,
+            address_id=addr.id,
+            device_id=dev.id,
+            channel="paypal",
+            is_cod=0,
+            order_value=val,
+            item_count=int(rng.integers(1, 3)),
+            category=cat["name"],
+            category_risk=cat["base_risk"],
+            checkout_speed_sec=round(float(rng.uniform(50.0, 200.0)), 1),
+            order_time=ord_time,
+        )
+
+        # Negative control: is_abuse = False (y = 0)
+        pay, ship, lbl = simulate_order_shipment_and_label(
+            rng, order, is_abuse=False, abuse_type="paypal_legit_inquiry"
+        )
+
+        orders.append(order)
+        payments.append(pay)
+        shipments.append(ship)
+        labels.append(lbl)
+
+    return orders, payments, shipments, labels, current_idx
