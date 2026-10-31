@@ -1,4 +1,7 @@
 # ReturnGuard Feature Dictionary (Frozen in Phase A)
+version: "1.0.0"
+status: "frozen"
+freeze_phase: "Phase A"
 
 order_payment:
   - name: channel
