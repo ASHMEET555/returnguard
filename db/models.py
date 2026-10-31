@@ -3,6 +3,7 @@
 import datetime
 
 from sqlalchemy import (
+    JSON,
     Column,
     DateTime,
     ForeignKey,
@@ -11,6 +12,7 @@ from sqlalchemy import (
     String,
     Text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 
 from db.session import Base
@@ -338,6 +340,9 @@ class AuditScoreEvent(Base):
     suggested_action = Column(String(32), nullable=False)
     reason_codes_json = Column(Text, nullable=False)
     rule_hits_json = Column(Text, nullable=False)
+    feature_snapshot_json = Column(
+        JSON().with_variant(JSONB, "postgresql"), nullable=True
+    )
     ring_id = Column(String(64), nullable=True)
     shadow = Column(Integer, default=1, nullable=False)  # 1 for true, 0 for false
     model_version = Column(String(64), nullable=False)
