@@ -1,0 +1,136 @@
+# ReturnGuard / MerchantShield IEEE-CIS Variant Feature Dictionary
+# Source of truth: ml/external/ieee/ieee_features.py and card_product_features.py
+# Architecture reference: docs/plan/02-architecture.md section C
+
+version: 1.0.0
+loss_class: payment_fraud
+feature_count: 16
+
+features:
+  - name: amount
+    type: float
+    description: Transaction amount
+    leakage_safe: true
+    ieee_source_field: TransactionAmt
+    mapping_note: Directly mapped from raw TransactionAmt.
+    available: true
+
+  - name: amount_zscore
+    type: float
+    description: Z-score of transaction amount against card expanding prior history
+    leakage_safe: true
+    ieee_source_field: TransactionAmt
+    mapping_note: Expanding mean and standard deviation computed strictly on prior transactions for card proxy.
+    available: true
+
+  - name: amount_vs_avg_ratio
+    type: float
+    description: Ratio of current amount to card prior average
+    leakage_safe: true
+    ieee_source_field: TransactionAmt
+    mapping_note: Ratio to expanding prior average amount for card proxy.
+    available: true
+
+  - name: prior_txn_count
+    type: int
+    description: Number of strictly prior transactions for this card
+    leakage_safe: true
+    ieee_source_field: TransactionDT
+    mapping_note: Cumulative count of prior transactions per card entity.
+    available: true
+
+  - name: time_since_prev_txn_min
+    type: float
+    description: Minutes elapsed since previous transaction on this card
+    leakage_safe: true
+    ieee_source_field: TransactionDT
+    mapping_note: Difference in TransactionDT seconds divided by 60.0.
+    available: true
+
+  - name: velocity_5min
+    type: int
+    description: Prior transactions within trailing 5 minutes
+    leakage_safe: true
+    ieee_source_field: TransactionDT
+    mapping_note: Rolling count within 300 seconds of prior transactions.
+    available: true
+
+  - name: velocity_30min
+    type: int
+    description: Prior transactions within trailing 30 minutes
+    leakage_safe: true
+    ieee_source_field: TransactionDT
+    mapping_note: Rolling count within 1800 seconds of prior transactions.
+    available: true
+
+  - name: velocity_60min
+    type: int
+    description: Prior transactions within trailing 60 minutes
+    leakage_safe: true
+    ieee_source_field: TransactionDT
+    mapping_note: Rolling count within 3600 seconds of prior transactions.
+    available: true
+
+  - name: new_device_flag
+    type: int
+    description: Binary indicator for novel device
+    leakage_safe: true
+    ieee_source_field: MISSING
+    mapping_note: IEEE does not carry consistent device tracking across transactions. Sentinel device_unknown produces constant 0.
+    available: false
+
+  - name: new_geo_flag
+    type: int
+    description: Binary indicator for novel geographic region
+    leakage_safe: true
+    ieee_source_field: addr1
+    mapping_note: Degraded signal using addr1 billing region proxy (11.1% null).
+    available: true
+
+  - name: failed_ratio_trailing10
+    type: float
+    description: Ratio of failed transactions in trailing 10 attempts
+    leakage_safe: true
+    ieee_source_field: MISSING
+    mapping_note: IEEE-CIS dataset includes only processed transactions; status defaults to success. Produces constant 0.0.
+    available: false
+
+  - name: account_age_days
+    type: float
+    description: Account age proxy in days
+    leakage_safe: true
+    ieee_source_field: D11
+    mapping_note: Degraded proxy using D11 timedelta feature (47.3% null defaults to 0).
+    available: true
+
+  - name: hour_of_day
+    type: int
+    description: Hour of transaction (0 to 23)
+    leakage_safe: true
+    ieee_source_field: TransactionDT
+    mapping_note: Inferred modulo 24 from TransactionDT elapsed seconds offset.
+    available: true
+
+  - name: is_night
+    type: int
+    description: Binary indicator for night-time transactions
+    leakage_safe: true
+    ieee_source_field: TransactionDT
+    mapping_note: Inferred from calculated hour_of_day (23:00 to 06:00).
+    available: true
+
+  - name: day_of_week
+    type: int
+    description: Day of week (0 to 6)
+    leakage_safe: true
+    ieee_source_field: TransactionDT
+    mapping_note: Inferred modulo 7 from TransactionDT elapsed days.
+    available: true
+
+  - name: card_product_share
+    type: float
+    description: Prior transaction share for this card on the current product category
+    leakage_safe: true
+    ieee_source_field: ProductCD
+    mapping_note: Proportion of prior transactions on this card that used ProductCD. 0.0 for first transaction.
+    available: true
