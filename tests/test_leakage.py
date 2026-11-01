@@ -36,9 +36,9 @@ def test_no_future_leakage_in_processed_datasets():
 
         # 1. Assert no blacklisted column exists in feature file
         present_leakage = LEAKAGE_BLACKLIST_COLUMNS.intersection(df.columns)
-        assert (
-            not present_leakage
-        ), f"{fname} contains forbidden leakage columns: {present_leakage}"
+        assert not present_leakage, (
+            f"{fname} contains forbidden leakage columns: {present_leakage}"
+        )
 
         # 2. Confirm order_time is present and all columns are known as-of
         assert "order_time" in df.columns
@@ -71,9 +71,9 @@ def test_feature_columns_match_dictionary():
     dataset_features = set(df_train.columns) - non_feature_metadata
 
     missing_in_data = dict_features - dataset_features
-    assert (
-        not missing_in_data
-    ), f"Features in dictionary but missing in dataset: {missing_in_data}"
+    assert not missing_in_data, (
+        f"Features in dictionary but missing in dataset: {missing_in_data}"
+    )
 
 
 def test_mutating_outcomes_after_as_of_does_not_change_features():
@@ -194,6 +194,6 @@ def test_mutating_outcomes_after_as_of_does_not_change_features():
     assert res_clean.model_vector == res_after_future_mutation.model_vector
     assert res_clean.feature_snapshot == res_after_future_mutation.feature_snapshot
     for k in res_clean.model_vector:
-        assert (
-            res_clean.model_vector[k] == res_after_future_mutation.model_vector[k]
-        ), f"Feature {k} leaked future mutation!"
+        assert res_clean.model_vector[k] == res_after_future_mutation.model_vector[k], (
+            f"Feature {k} leaked future mutation!"
+        )

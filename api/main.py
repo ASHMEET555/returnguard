@@ -1,5 +1,7 @@
 """ReturnGuard FastAPI Application Entrypoint."""
+
 from fastapi import FastAPI
+
 from api.routes import assistant, disputes, payments, score, webhooks
 
 app = FastAPI(
