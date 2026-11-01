@@ -1,299 +1,165 @@
-# 02 — Architecture, PayPal flows, features, data & eval
+# 02 — Architecture (ML-layer sections, replacing the original)
 
-Use while implementing Phases B–G. Freeze feature names after Phase A.
-
----
-
-## Module layout
-
-| Path | Job | Track mapping |
-|------|-----|---------------|
-| `data/generator/` | Synthetic COD and PayPal orders, refunds, disputes, abuse injectors | Dataset |
-| `rules/` | Spike thresholds, evidence_json | Fraud-spike |
-| `rings/` | Graph build + membership features | Abuse-ring |
-| `features/` | As-of feature builder, zero-fill, channel flag | Scorer input |
-| `ml/train.py`, `ml/evaluate.py` | Train, holdout, artifacts, per-channel metrics | Bar metrics |
-| `services/score.py` | Online detector | Return-risk scorer |
-| `services/policy.py` | Severity → soft action, shadow gate | Defense |
-| `services/evidence.py` | Pack builder mapped to PayPal evidence types | Dispute verifier |
-| `payments/paypal_client.py` | OAuth token, Orders create / authorize / capture (sandbox) | PayPal |
-| `payments/webhooks.py` | Signature verify, idempotent event store | PayPal |
-| `disputes/paypal_disputes.py` | List / get disputes, provide-evidence (sandbox-gated) | PayPal |
-| `assistant/llm.py` | LLM explanation and draft calls | AI (LLM) |
-| `assistant/guardrails.py` | Verifies every cited ID exists in stored records | AI safety |
-| `api/` | FastAPI routes | Working system |
-| `reports/` | `holdout_metrics.md/json`, per channel | Bar artifact |
-| `web/` | Next.js console with AG Grid Community | Judge UX |
-| `.env.example` | All secret names, no values | Repo hygiene |
-| `LICENSE` | Visible at repo root | Rules |
+Sections not listed here are unchanged from the original `02-architecture.md`.
 
 ---
 
-## Channels
+## A. Module layout (ML layer)
 
-Every order has a `channel`:
-
-- `cod`: original COD/RTO channel. Original features apply. Label is RTO or confirmed abusive return.
-- `paypal`: PayPal Orders sandbox channel. Prepaid. Label is refund abuse, meaning refund after delivery confirmation with no return receipt, or a dispute the seller lost on abuse grounds, within the outcome window.
-
-One model, `channel` as a feature. Report metrics per channel and overall. Do not average them to hide weak performance on one channel.
-
----
-
-## PayPal payment flow (sandbox)
-
-1. Customer starts checkout on the Next.js page. Client calls `POST /v1/payments/create`.
-2. Backend creates a PayPal order (`intent` = `AUTHORIZE` when `SHADOW_MODE=false`, otherwise `CAPTURE`) and stores `payment` with `status = created`.
-3. Buyer approves in the PayPal sandbox checkout. Backend receives the approval.
-4. Score the order as-of now (features + rules). Write `audit_score_events`.
-5. Policy decides:
-   - `allow`, `info`: capture (or authorize, then capture).
-   - `warning`: `step_up_verify` shown to the merchant. Capture waits for the merchant's choice.
-   - `critical`: `manual_review`. Capture is held. Merchant decides in the console.
-6. Capture: `POST /v1/payments/{id}/capture`. Capture and evidence submission are separate operations.
-7. Webhooks: `POST /v1/paypal/webhooks` verifies the signature, stores `payment_event` by `event_id`, and ignores duplicates.
-
-**Invariants**
-
-- The money path never auto-cancels, voids or rejects.
-- A held authorization has a review deadline. If it expires, the merchant is notified and can re-authorize or capture.
-- Shadow mode (`SHADOW_MODE=true`, default): capture as normal, log the score and suggested action. The policy never changes the payment outcome.
+| Path | Job |
+|------|-----|
+| `ml/data/generate_synthetic.py` | Synthetic transactions (verified) |
+| `ml/features/build_features.py` | 15 causal features (verified) |
+| `features/builder.py` | `build(order_id, as_of)` wrapper, writes `feature_snapshot_json` |
+| `features/adapter_order_to_txn.py` | PayPal order → verified transaction schema |
+| `ml/training/train_baseline.py`, `train_candidates.py` | Logistic regression, Random Forest, LightGBM (verified) |
+| `ml/training/train_ieee.py` | IEEE retraining with `card_product_share` (verified path, versioned output) |
+| `ml/evaluation/policy.py`, `risk_scoring.py`, `decision_engine.py` | Policy, score, decision (verified) |
+| `ml/evaluation/cost_model.py`, `threshold_analysis.py` | Cost and threshold (verified) |
+| `ml/explain/shap_service.py` | Read-only SHAP top-K over verified TreeSHAP |
+| `ml/evaluate.py`, `ml/evaluate_lift.py` | Holdout reports and lift table |
+| `services/policy_mapping.py` | Policy action → severity and suggested action |
+| `rules/engine.py` | `spike_velocity` (evidence only) |
+| `rings/builder.py` | Display-only ring module |
+| `reports/` | Holdout, experiments, manifest |
 
 ---
 
-## Online score flow
+## B. Data and splits (verified)
 
-1. Client `POST /v1/score` with `order_id` (COD or PayPal).
-2. Run spike rules as-of now → `rule_hits` + evidence.
-3. FeatureBuilder as-of `order_time`, joined with batch ring features.
-4. Model `predict_proba` → `risk_score`. If the model is missing, fall back to rules-only severity.
-5. Policy → severity + `suggested_action`.
-6. Append `audit_score_events`.
-7. Return JSON. Never block money in shadow mode.
+**Synthetic:** train days 0–39, validation 40–49, test 50–59. About 1.59% fraud.
 
-**Invariants**
+**IEEE-CIS:** 590,540 rows, about 182 days, 20,663 fraud labels (about 3.499%). Train days 0–110, validation 110–140, test 140–182. The shared boundary at 110 must be fixed in Phase A so intervals do not overlap. Random splits are forbidden.
 
-- Features as-of order time. No future leakage.
-- Rules always run.
-- Reason codes = top-K SHAP-style or model-contribution values.
+**IEEE leakage caution:** several IEEE aggregate columns (the C, D and V families) are not guaranteed to be as-of the transaction time. Any such column used as a feature must pass the leakage test in Phase B before it is used.
 
-### Score response contract
+---
+
+## C. Feature dictionary
+
+**Frozen 15 (synthetic model):**
+
+- Transaction and spending: `amount`, `amount_zscore`, `amount_vs_avg_ratio`, `prior_txn_count`, `time_since_prev_txn_min`
+- Velocity: `velocity_5min`, `velocity_30min`, `velocity_60min`
+- Novelty: `new_device_flag`, `new_geo_flag`
+- Behavioural and temporal: `failed_ratio_trailing10`, `account_age_days`, `hour_of_day`, `is_night`, `day_of_week`
+
+**IEEE variant (`features/dictionary_ieee_v1.yaml`):** the 15 mapped to IEEE fields where available, plus `card_product_share`. Device novelty and failure ratio are missing or differ in IEEE. Each mapping and each missing signal is documented in the file.
+
+**Rules for changing the dictionary:** adding, removing or reordering a feature is a new dictionary version and needs retraining. It cannot be done inside another task.
+
+**Order → transaction mapping (PayPal):** the adapter maps order amount, time, customer, merchant category and payment status. Device and geo come from the merchant's app session data when present. When absent, the sentinel path is used and the response sets `feature_completeness < 1.0` and lists the missing fields. Missing fields are never invented.
+
+---
+
+## D. Models and artifacts
+
+| Artifact | Dataset | Role |
+|----------|---------|------|
+| `baseline_logreg_v1.pkl` | synthetic | Linear baseline (frozen) |
+| `candidate_rf_v1.pkl` | synthetic | Nonlinear baseline (frozen) |
+| `candidate_lgbm_v1.pkl` | synthetic | Demo and reference production model (frozen) |
+| IEEE LightGBM Phase 17 artifact | IEEE-CIS | Real-world artifact at τ = 0.35 (frozen) |
+| IEEE LightGBM v2 (only if the improvement program finds a better validated candidate) | IEEE-CIS | New version, approved by user before use |
+| Amount-only baseline | both | Lift-table baseline, dataset-specific amount threshold |
+
+LightGBM hyperparameters (verified): `num_leaves=31`, `max_depth=6`, `learning_rate=0.05`, `n_estimators=600`, `min_child_samples=20`, `subsample=0.8`, `colsample_bytree=0.8`, `scale_pos_weight=73.12`, `objective='binary'`. Early stopping: 50 rounds on validation AUC, with `eval_metric='auc'` and `first_metric_only=True`. Do not use `average_precision` for early stopping; it stopped at iteration 1.
+
+---
+
+## E. Evaluation (verified results, reproduced in Phase C)
+
+### Synthetic held-out test
+
+| Model | Precision | Recall | F1 | PR-AUC | ROC-AUC | Expected cost (₹) |
+|---|---:|---:|---:|---:|---:|---:|
+| Logistic regression | 0.448 | 0.825 | 0.581 | 0.739 | 0.957 | 110,582 |
+| Random Forest | 0.746 | 0.868 | 0.802 | 0.883 | 0.978 | 68,479 |
+| LightGBM | 0.785 | 0.882 | 0.830 | 0.901 | 0.984 | 41,377 |
+
+LightGBM reduces expected cost by about 62.6% against logistic regression and about 39.6% against Random Forest.
+
+At τ = 0.40 on validation: precision 0.695, recall 0.877, 216 FP, 69 FN, cost ₹54,827.
+
+### IEEE-CIS external validation
+
+- Experiment A (synthetic model transferred directly): ROC-AUC 0.443, recall 0.5%. Failed. Reported as a finding.
+- Experiment B (retrained on IEEE with `card_product_share`): `card_product_share` was third by gain.
+- Phase 17 held-out: ROC-AUC 0.771, recall 79.8%, precision 6.3%, 48,139 FP, 3,243 of 4,064 fraud caught, τ = 0.35, cost 2,469,531 cost units (to be recomputed in ₹ per the verification item).
+
+**Honest reading:** the IEEE model is a high-recall filter for step-up verification. It is not a precise blocker. Every external document says so.
+
+### Cost model for reporting
+
+Cost (₹) = FP count × ₹50 + sum of FN amounts × 0.50. The IEEE currency is not stated, so its ₹ figure is labeled "currency assumed, UNVERIFIED."
+
+---
+
+## F. Explainability (SHAP, first layer of explanation)
+
+- Shipping artifact: LightGBM with `shap.TreeExplainer` (verified).
+- The top-K SHAP contributions (signed, with direction) form `reason_codes` in the score response.
+- Additivity check: reconstructed probability from base value plus SHAP sum, compared with predicted probability. Difference must be below 1e-4. Otherwise `explanation_status: unavailable`.
+- Human-readable text comes from deterministic templates. Templates use only the feature name, direction and stored values.
+- History-dependent explanations are filtered for customers with no prior transactions.
+- SHAP never changes the probability, tier, policy rule or action.
+- SHAP for Random Forest and logistic regression is optional and reported only in the lift analysis. It is not in the score response.
+
+---
+
+## G. Score response contract (ML layer)
 
 ```json
 {
   "order_id": "ord_...",
   "channel": "paypal",
   "risk_score": 0.72,
-  "severity": "critical",
-  "reason_codes": ["cust_rto_rate", "is_cod", "ring_size"],
+  "risk_score_100": 72,
+  "tier": "HIGH",
+  "policy_rule": "HIGH_STEP_UP",
+  "policy_action": "STEP_UP_VERIFICATION",
+  "severity": "warning",
+  "suggested_action": "step_up_verify",
+  "reason_codes": [
+    {"feature": "velocity_5min", "direction": "increases_risk", "shap_rank": 1}
+  ],
   "rule_hits": ["spike_velocity"],
-  "ring_id": "R17",
-  "suggested_action": "manual_review",
-  "shadow": true,
-  "model_version": "rg_xgb_v1"
+  "ring_id": null,
+  "model_version": "lgbm_synth_v1",
+  "dataset": "synthetic",
+  "threshold": 0.40,
+  "model_status": "ok",
+  "feature_completeness": 0.87,
+  "explanation_status": "ok",
+  "shadow": true
 }
 ```
 
----
-
-## Ring build (batch)
-
-1. Normalize phone, address and device → undirected edges.
-2. Connected components; keep size ≥ 3 with high `ring_return_rate`.
-3. Write `ring_membership` and aggregates.
-4. Online score looks up only. No graph walk on the request path.
+Field notes:
+- `risk_score` is the probability (0–1). `risk_score_100` is the verified informational score.
+- `policy_action` comes from the verified policy. `severity` and `suggested_action` come from `services/policy_mapping.py`.
+- `channel` is informational. The verified model has no channel input.
+- `ring_id` is display-only and `null` when no ring applies.
+- `model_status`: `ok` or `unavailable`. On `unavailable`, the fallback returns `policy_action` from the amount-only rule (`STEP_UP_VERIFICATION` at or above the amount threshold, otherwise `ALLOW_WITH_MONITORING`). It never returns `BLOCK`.
 
 ---
 
-## Dispute evidence flow (PayPal Disputes API)
+## H. Rules and rings (evidence only)
 
-1. `GET /v1/disputes` (sandbox) → store `dispute` with `paypal_dispute_id`, reason, status, amount, and the `evidences` array.
-2. Find the linked `payment` and order. Score the order if no score exists.
-3. Build the evidence checklist from the dispute's requested evidence (`source = REQUESTED_FROM_SELLER`), using PayPal evidence types.
-4. Find up to 2 prior undisputed orders from the same customer and address for the prior-order match helper (optional, labelled as an internal helper, not a network rule).
-5. Compute completeness % and heuristic `win_likelihood`. Document it as a heuristic.
-6. Return JSON + markdown draft. Every number traces to a stored row.
-7. `POST /v1/disputes/{id}/approve`: writes `merchant_audit` with approver and time.
-8. `POST /v1/disputes/{id}/submit`: runs only if `PAYPAL_SUBMIT_ENABLED=true` and environment is sandbox. Calls `POST /v1/customer/disputes/{id}/provide-evidence` with the approved pack. Records `evidence_submission`.
-
-**Submit guards:** dispute status must be `WAITING_FOR_SELLER_RESPONSE`; approval must exist; the pack hash must match the approved hash.
-
-### PayPal evidence type mapping
-
-| Dispute evidence type (PayPal) | Source in ReturnGuard |
-|--------------------------------|-----------------------|
-| `PROOF_OF_FULFILLMENT` | `delivery` record: tracking, carrier, delivered date |
-| `PROOF_OF_REFUND` | `refund` record: refund ID, amount, date |
-| `PROOF_OF_RETURN` | `return_event` record, received-at date |
-| `OTHER` | Free-text notes, reviewed by the human |
-
-Check the exact evidence types returned by the sandbox dispute before hard-coding this table. Unknown types go to `OTHER` with a checklist warning.
-
-### Evidence pack sections
-
-Dispute header → disputed payment → delivery / return / refund records → prior-order match helper (optional) → risk score, reasons and ring → PayPal evidence checklist (pass/fail per type) → `win_likelihood` disclaimer.
+- `spike_velocity` fires from the verified velocity features. Thresholds are in `rules/config.yaml`, calibrated on validation. It is recorded in `rule_hits` and in the evidence bundle. It does not set the action.
+- Ring module: deterministic union-find over phone, address and device. Components of size 3 or more get a `ring_id`. Display-only. Not a model input. Lookup-only on the request path.
+- If the verified data lacks phone or address fields, the seed adapter provides them for the demo, and the synthetic model is not retrained because of this.
 
 ---
 
-## LLM assistant
+## I. Leakage rules
 
-The ML model decides. The LLM explains.
-
-**Input to the LLM:** only the stored JSON for the order (score, severity, reason codes, rule hits, ring, dispute, delivery and refund records).
-
-**Output rules:**
-- Plain-language explanation of each reason code.
-- Recommended action from the policy table. The LLM cannot change it.
-- Every ID it mentions must exist in the input record.
-
-**Guardrails (`assistant/guardrails.py`):**
-- Extract IDs from the LLM output and check each one against the input record. Reject or regenerate if any ID is unknown.
-- Block any claim of a delivery confirmation, tracking number or amount that is not in the record.
-- Store the prompt and output in `merchant_audit`.
-
-**Endpoints:** `POST /v1/assistant/chat` (questions about one order or dispute), and the same LLM call used for evidence narrative drafts.
+- All history features use only prior transactions (j < i) and sentinels on cold start.
+- Leakage test: insert data after time t, then assert the feature vector at t is unchanged. Covers all 15 features, the IEEE variant, and any IEEE aggregate column used.
+- Batch ring builds are cut at `as_of`. The online path only reads precomputed membership.
 
 ---
 
-## AG Grid licensing and scope
+## J. Explicit boundary for the evidence engine (Phase G, unchanged)
 
-Checked against AG Grid docs.
-
-| Feature | Community (MIT, free) | Enterprise (commercial) |
-|---------|------------------------|--------------------------|
-| Sorting, filtering, pagination, row selection | Yes | Yes |
-| Custom cell renderers (risk badges, severity colours) | Yes | Yes |
-| Row pinning, column pinning | Yes | Yes |
-| Master-detail (expandable rows) | No | Yes |
-| Row grouping and aggregation | No | Yes |
-| Excel export | No | Yes |
-| Server-side row model | No | Yes |
-| Tool panels, context menu | No | Yes |
-
-**Decision:** build the console on AG Grid Community.
-
-- Transaction explorer: sort, filter, severity badges, pagination.
-- Abuse-ring explorer: filter by `ring_id`, click a row to open the ring drawer.
-- Dispute investigation: click a row to open a **React detail drawer** showing PayPal transaction ID, order history, score, reason codes, rule hits, ring and evidence status.
-- Model performance: precision, recall, F1, FP cost and threshold table, per channel.
-
-**Enterprise option:** if a 30-day Enterprise trial is used for master-detail, the Enterprise key must come from an environment variable, never the repo. The repo must still run with Community alone. Judges running locally can use the Enterprise packages without a key, but a hosted demo needs a key. Choose this only if time allows.
-
----
-
-## Feature dictionary (15–20 per channel, plus payment)
-
-### Order / payment
-
-| Feature | Channel | Notes |
-|---------|---------|-------|
-| `channel` | both | `cod` or `paypal` |
-| `is_cod` | both | 0 for PayPal |
-| `order_value` | both | Gross ₹ |
-| `order_value_vs_cust_avg` | both | vs customer AOV |
-| `item_count` | both | Lines |
-| `category_risk` | both | Category return-rate bucket |
-| `checkout_speed_sec` | both | Synthetic session proxy in sandbox |
-| `payment_authorized` | paypal | Authorization status at score time |
-| `payment_captured` | paypal | Capture status at score time |
-| `order_to_payment_ratio` | paypal | Order value / amount authorized |
-
-### Customer history
-
-| Feature | Notes |
-|---------|-------|
-| `cust_order_count` | Prior completed orders, any channel |
-| `cust_rto_rate` | Prior RTO rate (COD) |
-| `cust_return_rate` | Prior return rate |
-| `cust_refund_rate` | Prior refund rate (PayPal) |
-| `cust_dispute_count` | Prior PayPal disputes |
-| `days_since_last_rto` | Recency |
-| `successful_delivery_streak` | Consecutive non-RTO |
-
-### Address / geo
-
-| Feature | Notes |
-|---------|-------|
-| `address_completeness` | Required fields |
-| `pincode_rto_rate` | Pincode bucket history |
-| `is_new_address` | First use for customer |
-
-### Velocity / spike (also rules)
-
-| Feature | Notes |
-|---------|-------|
-| `orders_24h`, `orders_7d` | Burst |
-| `returns_7d`, `refunds_7d` | Return and refund spike |
-| `cod_share_7d` | Cash-heavy |
-| `micro_return_pct_30d` | Micro structuring |
-
-Rules: `spike_velocity`, `spike_cod_heavy`, `spike_micro` in `rules/config.yaml`.
-
-### Abuse-ring
-
-| Feature | Notes |
-|---------|-------|
-| `shared_phone_accounts` | Distinct customers |
-| `shared_address_accounts` | Normalized address |
-| `shared_device_accounts` | `device_hash` from the merchant's own app data (not PayPal) |
-| `ring_size` | Component size |
-| `ring_return_rate` | Component mean |
-
-### Leakage blacklist (do not train on)
-
-- Outcomes after the as-of time.
-- Dispute results and PayPal settlement fields for the pre-ship model. Allowed only in the evidence pack.
-- Label-mirroring composites.
-- Webhook event timestamps later than as-of.
-
----
-
-## Data & labels
-
-**Entities:** merchant, customer, address, device, order, payment, payment_event, shipment, return_event, refund, dispute, evidence_pack, evidence_submission, merchant_audit.
-
-**Channel-specific labels:**
-- `cod`: `y = 1` if RTO or confirmed abusive return within the outcome window.
-- `paypal`: `y = 1` if refund after delivery with no return receipt, or a dispute lost on abuse grounds, within the outcome window.
-
-**Abuse injectors (synthetic):** serial RTO on COD; address-farm ring; velocity spike week; high-value first order; clean loyal prepaid; PayPal refund-after-delivery repeat; PayPal dispute on a legitimate delivered order (negative control).
-
-**Label delay:** simulate 3–7 days for both channels.
-
-### Split
-
-1. Sort by `order_time`.
-2. Train ≤ T0; validation (T0, T1]; **test > T1**.
-3. Hold out about 15% of `customer_id` never seen in training.
-4. Publish sizes, base rates and split dates per channel.
-
-### Metrics package (`reports/holdout_metrics.*`)
-
-- Confusion matrix at the operating threshold, per channel and overall.
-- Precision, recall, F1, PR-AUC.
-- Threshold sweep 0.3–0.8 with alert volume %.
-- FP cost and Net ₹:
-
-```
-avg_rto_loss_₹     = 180
-ops_min_per_FP     = 8
-ops_₹_per_min      = 5
-goodwill_₹_per_FP  = 50
-intervention_₹     = 45
-
-FP_cost = FP * (ops_min_per_FP * ops_₹_per_min + goodwill_₹_per_FP)
-TP_save = TP * avg_rto_loss_₹
-Net     = TP_save - FP_cost - (TP+FP)*intervention_₹
-```
-
-Use the same constants for PayPal with `avg_refund_loss_₹` set in `docs/fp_cost_assumptions.md`.
-
-**Baselines on the same holdout:** (1) rules-only, (2) logistic, (3) XGBoost. Publish the lift table per channel.
-
----
-
-## Security and config
-
-- `.env.example` lists `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `PAYPAL_WEBHOOK_ID`, `PAYPAL_ENV=sandbox`, `PAYPAL_SUBMIT_ENABLED=false`, `SHADOW_MODE=true`, `LLM_API_KEY`, `AG_GRID_LICENSE_KEY` (optional).
-- Webhook endpoint rejects any event without a valid signature.
-- Logs redact card and account data. The demo uses sandbox accounts only.
+The evidence engine receives the stored decision record, the top-K SHAP contributions, and the rule hits. It does not recompute SHAP and does not change the action. Phase G's guardrails are unchanged from the original plan. If you later approve adding a vector DB, it goes into Phase G as a new decision (M6).
