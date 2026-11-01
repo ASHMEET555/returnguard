@@ -14,35 +14,35 @@ Tags: **[REUSE]** verified and frozen, **[EXTEND]** additive change, **[NEW]** b
 
 ### Tasks
 
-- [ ] Create branch `ml-verified`. Copy the ML files listed in `00-codebase-map.md` section 1 with no edits. Commit as-is. **[REUSE]**
-- [ ] Record the commit hash and a SHA-256 manifest of `ml/models/*.pkl` to `reports/artifact_manifest.json`. **[NEW]**
-- [ ] Create a virtual environment with the pinned versions from `00-codebase-map.md`. **[REUSE]**
-- [ ] Run the ML test subset. Expected 269 passing across 8 files. Save output to `reports/phase_a/pytest.txt`. **[REUSE]**
-- [ ] Regenerate synthetic data with seed 42. Compare output hashes with the prior run. If they differ, record the cause. **[REUSE]**
-- [ ] Set `IEEE_DATA_DIR`. Load IEEE and confirm 590,540 rows and 20,663 fraud labels. Record the currency note for `TransactionAmt` as UNVERIFIED. **[REUSE + NEW]**
-- [ ] Verification 1: check `scale_pos_weight = 73.12` against training-split prevalence. Record it. **[NEW]**
-- [ ] Verification 2: fix the IEEE train/validation boundary at day 110 so intervals do not overlap. Record the choice in `docs/split_decisions.md`. **[NEW]**
-- [ ] Verification 4: decompose the Phase 17 cost (2,469,531) against stored predictions. Record the implied FN amount total. **[NEW]**
-- [ ] Verification 5 and 6: confirm the PayPal 3-day honor period and the sandbox dispute reason and evidence type names. Mark UNVERIFIED until confirmed. **[NEW]**
-- [ ] Generate `features/dictionary.yaml` from the verified 15 names in code. Check against `02-architecture.md` section C. Fail the phase on any mismatch. **[NEW]**
-- [ ] Generate `features/dictionary_ieee_v1.yaml` for the IEEE variant. Document each mapping and each missing signal. **[NEW]**
-- [ ] Keep the original schema tables as schema only: `order`, `payment`, `payment_event`, `dispute`, `evidence_pack`, `evidence_submission`, `merchant_audit`. Add `audit_score_event` with `feature_snapshot_json` (nullable). Migrations are idempotent. **[KEEP + EXTEND]**
-- [ ] Run the audit layer tests on both SQLite and PostgreSQL, per decision M5. **[NEW]**
-- [ ] Write `docs/data_mapping.md`: PayPal order fields to the verified transaction schema, with missing-field handling. **[NEW]**
-- [ ] Seed adapter: a script that reads the verified synthetic transactions and writes an order-shaped file for Phase D's sandbox seed. Do not run it until Phase D. **[NEW]**
-- [ ] Move the COD/RTO generator, parquet split, COD label code and the old 25-feature dictionary to `legacy/`. Do not import from `legacy/`. **[DROP]**
-- [ ] Keep `LICENSE` and the defense pledge text. **[KEEP]**
+- [x] Create branch `ml-verified`. Copy the ML files listed in `00-codebase-map.md` section 1 with no edits. Commit as-is. **[REUSE]**
+- [x] Record the commit hash and a SHA-256 manifest of `ml/models/*.pkl` to `reports/artifact_manifest.json`. **[NEW]**
+- [x] Create a virtual environment with the pinned versions from `00-codebase-map.md`. **[REUSE]**
+- [x] Run the ML test subset. Expected 269 passing across 8 files. Save output to `reports/phase_a/pytest.txt`. **[REUSE]**
+- [x] Regenerate synthetic data with seed 42. Compare output hashes with the prior run. If they differ, record the cause. **[REUSE]**
+- [x] Set `IEEE_DATA_DIR`. Load IEEE and confirm 590,540 rows and 20,663 fraud labels. Record the currency note for `TransactionAmt` as UNVERIFIED. **[REUSE + NEW]**
+- [x] Verification 1: check `scale_pos_weight = 73.12` against training-split prevalence. Record it. **[NEW]**
+- [x] Verification 2: fix the IEEE train/validation boundary at day 110 so intervals do not overlap. Record the choice in `docs/split_decisions.md`. **[NEW]**
+- [x] Verification 4: decompose the Phase 17 cost (2,469,531) against stored predictions. Record the implied FN amount total. **[NEW]**
+- [x] Verification 5 and 6: confirm the PayPal 3-day honor period and the sandbox dispute reason and evidence type names. Mark UNVERIFIED until confirmed. **[NEW]**
+- [x] Generate `features/dictionary.yaml` from the verified 15 names in code. Check against `02-architecture.md` section C. Fail the phase on any mismatch. **[NEW]**
+- [x] Generate `features/dictionary_ieee_v1.yaml` for the IEEE variant. Document each mapping and each missing signal. **[NEW]**
+- [x] Keep the original schema tables as schema only: `order`, `payment`, `payment_event`, `dispute`, `evidence_pack`, `evidence_submission`, `merchant_audit`. Add `audit_score_event` with `feature_snapshot_json` (nullable). Migrations are idempotent. **[KEEP + EXTEND]**
+- [x] Run the audit layer tests on both SQLite and PostgreSQL, per decision M5. **[NEW]**
+- [x] Write `docs/data_mapping.md`: PayPal order fields to the verified transaction schema, with missing-field handling. **[NEW]**
+- [x] Seed adapter: a script that reads the verified synthetic transactions and writes an order-shaped file for Phase D's sandbox seed. Do not run it until Phase D. **[NEW]**
+- [x] Move the COD/RTO generator, parquet split, COD label code and the old 25-feature dictionary to `legacy/`. Do not import from `legacy/`. **[DROP]**
+- [x] Keep `LICENSE` and the defense pledge text. **[KEEP]**
 
 ### Exit criteria
 
-- [ ] Verified ML layer runs from a clean clone with the documented steps
-- [ ] ML test subset matches baseline (269 passing)
-- [ ] Artifact manifest matches files on disk
-- [ ] Synthetic regeneration matches, or the difference is explained
-- [ ] IEEE loads with expected counts; currency note recorded
-- [ ] Verifications 1, 2, 4, 5 and 6 have recorded results
-- [ ] Feature dictionaries match the code
-- [ ] Schema migrations run twice without error on both databases
+- [x] Verified ML layer runs from a clean clone with the documented steps
+- [x] ML test subset matches baseline (269 passing)
+- [x] Artifact manifest matches files on disk
+- [x] Synthetic regeneration matches, or the difference is explained
+- [x] IEEE loads with expected counts; currency note recorded
+- [x] Verifications 1, 2, 4, 5 and 6 have recorded results
+- [x] Feature dictionaries match the code
+- [x] Schema migrations run twice without error on both databases
 
 **Next:** Phase B
 
