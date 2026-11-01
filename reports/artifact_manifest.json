@@ -1,0 +1,55 @@
+{
+  "source_repo": "https://github.com/ASHMEET555/merchantshield-ai",
+  "source_commit": "f9a4333b4136d5d0dfcd3e4cfb018e07a3b3599f",
+  "artifacts": {
+    "ml/models/__init__.py": {
+      "file_path": "ml/models/__init__.py",
+      "size_bytes": 82,
+      "sha256": "e871cb6aa0c223b37e1e95d9fec426825caa1caae5cf98322edf308bb8a6b91f",
+      "source_path": "merchantshield-ai/ml/models/__init__.py",
+      "frozen": true
+    },
+    "ml/models/baseline_logreg_v1.pkl": {
+      "file_path": "ml/models/baseline_logreg_v1.pkl",
+      "size_bytes": 2513,
+      "sha256": "c35e96a5177148bfc343520890350bb374e7831b23e58642c18e1568d914a7a6",
+      "source_path": "merchantshield-ai/ml/models/baseline_logreg_v1.pkl",
+      "frozen": true
+    },
+    "ml/models/candidate_lgbm_v1.pkl": {
+      "file_path": "ml/models/candidate_lgbm_v1.pkl",
+      "size_bytes": 1017316,
+      "sha256": "ef7a5f31457d86157d863e9597f12b05f2a5491a38a9b4cc0930ef0dc2671e05",
+      "source_path": "merchantshield-ai/ml/models/candidate_lgbm_v1.pkl",
+      "frozen": true
+    },
+    "ml/models/candidate_rf_v1.pkl": {
+      "file_path": "ml/models/candidate_rf_v1.pkl",
+      "size_bytes": 2155881,
+      "sha256": "589a578d1528ee73910ac30fff9cbe061f8195cc37cdc4f2b031de2e2250bdc4",
+      "source_path": "merchantshield-ai/ml/models/candidate_rf_v1.pkl",
+      "frozen": true
+    },
+    "ml/models/lgbm_v1_metadata.json": {
+      "file_path": "ml/models/lgbm_v1_metadata.json",
+      "size_bytes": 3073,
+      "sha256": "b91ac04a6b93f3bc638dcf62bbc3bbdee73dca9d687e97f40f5bb5330226f052",
+      "source_path": "merchantshield-ai/ml/models/lgbm_v1_metadata.json",
+      "frozen": true
+    },
+    "ml/models/threshold_analysis_chart.png": {
+      "file_path": "ml/models/threshold_analysis_chart.png",
+      "size_bytes": 153288,
+      "sha256": "b62bec516a08e5033a8ace0fd77418ed1285db61f4d10ca0d9cd25aca752b92e",
+      "source_path": "merchantshield-ai/ml/models/threshold_analysis_chart.png",
+      "frozen": true
+    },
+    "ml/models/threshold_sweep_validation.csv": {
+      "file_path": "ml/models/threshold_sweep_validation.csv",
+      "size_bytes": 2041,
+      "sha256": "c508648d4ec6b4863cafff377f50e8e6328ff11d303ed9188ed4f28eef05838a",
+      "source_path": "merchantshield-ai/ml/models/threshold_sweep_validation.csv",
+      "frozen": true
+    }
+  }
+}
