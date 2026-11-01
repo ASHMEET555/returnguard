@@ -1,13 +1,20 @@
 """CLI script to inspect point-in-time features and rule hits for sample orders.
 
 Usage:
+    python scripts/inspect_order.py <order_id>
     python -m scripts.inspect_order [--order-id ORD_ID]
 """
 
 import argparse
 import json
+import sys
 from pathlib import Path
 from typing import Any
+
+# Ensure project root is in sys.path when script is executed directly
+REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 import pandas as pd
 
@@ -103,6 +110,12 @@ def main() -> None:
         description="Inspect features and rule hits for sample ReturnGuard orders."
     )
     parser.add_argument(
+        "order_id_pos",
+        nargs="?",
+        default=None,
+        help="Order ID to inspect (positional)",
+    )
+    parser.add_argument(
         "--order-id",
         type=str,
         default=None,
@@ -115,7 +128,8 @@ def main() -> None:
         help="Path to parquet dataset",
     )
     args = parser.parse_args()
-    inspect_order(order_id=args.order_id, dataset_path=args.dataset)
+    target_id = args.order_id or args.order_id_pos
+    inspect_order(order_id=target_id, dataset_path=args.dataset)
 
 
 if __name__ == "__main__":
