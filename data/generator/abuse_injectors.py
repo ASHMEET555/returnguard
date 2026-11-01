@@ -48,23 +48,32 @@ def inject_serial_rto(
     orders, payments, shipments, labels = [], [], [], []
     current_idx = start_order_idx
 
-    for cust in abuser_custs:
+    for a_idx, cust in enumerate(abuser_custs):
         addr = addr_map[cust.id]
         dev = dev_map[cust.id]
         base_time = max(cust.created_at, start_date)
+        is_micro_abuser = a_idx < 20  # Micro-return structuring injection
 
         for step in range(orders_per_abuser):
             current_idx += 1
             ord_id = f"ord_{current_idx:06d}"
-            ord_time = base_time + datetime.timedelta(
-                days=step * int(rng.integers(3, 10)),
-                hours=int(rng.integers(1, 12)),
-            )
-
-            cat = rng.choice(CATEGORIES)
-            val = round(
-                max(400.0, float(rng.normal(cat["aov_mean"], cat["aov_std"]))), 2
-            )
+            if is_micro_abuser:
+                # 3+ low-value orders (<= 300 INR) structured within 30-day window
+                ord_time = base_time + datetime.timedelta(
+                    days=step * 1,
+                    hours=int(rng.integers(1, 6)),
+                )
+                cat = {"name": "Apparel", "base_risk": 0.28}
+                val = round(float(rng.uniform(140.0, 280.0)), 2)
+            else:
+                ord_time = base_time + datetime.timedelta(
+                    days=step * int(rng.integers(3, 10)),
+                    hours=int(rng.integers(1, 12)),
+                )
+                cat = rng.choice(CATEGORIES)
+                val = round(
+                    max(400.0, float(rng.normal(cat["aov_mean"], cat["aov_std"]))), 2
+                )
 
             order = SyntheticOrder(
                 id=ord_id,
@@ -158,6 +167,8 @@ def inject_address_farm_ring(
                 ip_address="103.21.244.15",
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/124.0.0.0 Safari/537.36",
             )
+            addresses.append(cust_addr)
+            devices.append(cust_dev)
 
             # Each member places 2-3 orders
             for ord_step in range(int(rng.integers(2, 4))):

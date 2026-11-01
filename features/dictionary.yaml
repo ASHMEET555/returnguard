@@ -1,5 +1,5 @@
-# ReturnGuard Feature Dictionary (Frozen in Phase A)
-version: "1.0.0"
+# ReturnGuard Feature Dictionary (Frozen in Phase A, model_input flagged in Phase B)
+version: "1.1.0"
 status: "frozen"
 freeze_phase: "Phase A"
 
@@ -7,134 +7,165 @@ order_payment:
   - name: channel
     channel: both
     type: string
+    model_input: true
     description: Payment channel ('cod' or 'paypal')
   - name: is_cod
     channel: both
     type: integer
+    model_input: true
     description: 1 for COD, 0 for PayPal
   - name: order_value
     channel: both
     type: float
+    model_input: true
     description: Gross order value in INR
   - name: order_value_vs_cust_avg
     channel: both
     type: float
+    model_input: true
     description: Ratio of current order value to customer historical AOV
   - name: item_count
     channel: both
     type: integer
+    model_input: false
     description: Number of line items in order
   - name: category_risk
     channel: both
     type: float
+    model_input: true
     description: Category-level baseline return rate bucket
   - name: checkout_speed_sec
     channel: both
     type: float
+    model_input: false
     description: Session duration proxy before checkout completion
   - name: payment_authorized
     channel: paypal
     type: integer
+    model_input: false
     description: Authorization status flag at score time (1/0)
   - name: payment_captured
     channel: paypal
     type: integer
+    model_input: false
     description: Capture status flag at score time (1/0)
   - name: order_to_payment_ratio
     channel: paypal
     type: float
+    model_input: false
     description: Order gross value divided by authorized amount
 
 customer_history:
   - name: cust_order_count
     channel: both
     type: integer
+    model_input: true
     description: Prior completed orders across all channels
   - name: cust_rto_rate
     channel: both
     type: float
+    model_input: true
     description: Prior RTO rate on COD orders
   - name: cust_return_rate
     channel: both
     type: float
+    model_input: true
     description: Prior return rate across all orders
   - name: cust_refund_rate
     channel: both
     type: float
+    model_input: false
     description: Prior refund rate on PayPal orders
   - name: cust_dispute_count
     channel: both
     type: integer
+    model_input: false
     description: Count of prior PayPal disputes
   - name: days_since_last_rto
     channel: both
     type: float
+    model_input: true
     description: Days elapsed since customer's last RTO event
   - name: successful_delivery_streak
     channel: both
     type: integer
+    model_input: false
     description: Consecutive non-RTO delivered orders
 
 address_geo:
   - name: address_completeness
     channel: both
     type: float
+    model_input: true
     description: Ratio of non-empty standard address fields
   - name: pincode_rto_rate
     channel: both
     type: float
+    model_input: false
     description: Historical RTO rate for the delivery pincode
   - name: is_new_address
     channel: both
     type: integer
+    model_input: true
     description: 1 if this address has not been used by customer before
 
 velocity_spike:
   - name: orders_24h
     channel: both
     type: integer
+    model_input: true
     description: Number of orders placed in trailing 24 hours
   - name: orders_7d
     channel: both
     type: integer
+    model_input: true
     description: Number of orders placed in trailing 7 days
   - name: returns_7d
     channel: both
     type: integer
+    model_input: true
     description: Number of returns initiated in trailing 7 days
   - name: refunds_7d
     channel: both
     type: integer
+    model_input: false
     description: Number of refunds requested in trailing 7 days
   - name: cod_share_7d
     channel: both
     type: float
+    model_input: true
     description: Proportion of COD orders in trailing 7 days
   - name: micro_return_pct_30d
     channel: both
     type: float
+    model_input: false
     description: Percentage of micro-value returns in trailing 30 days
 
 abuse_ring:
   - name: shared_phone_accounts
     channel: both
     type: integer
+    model_input: false
     description: Distinct customer accounts sharing the phone number
   - name: shared_address_accounts
     channel: both
     type: integer
+    model_input: true
     description: Distinct customer accounts sharing normalized address
   - name: shared_device_accounts
     channel: both
     type: integer
+    model_input: false
     description: Distinct customer accounts sharing merchant device hash
   - name: ring_size
     channel: both
     type: integer
+    model_input: true
     description: Size of connected component graph
   - name: ring_return_rate
     channel: both
     type: float
+    model_input: true
     description: Mean historical return rate across connected ring members
 
 leakage_blacklist:

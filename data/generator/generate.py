@@ -202,7 +202,6 @@ def compute_point_in_time_features(
         shared_phone = len(phone_to_custs.get(cust.phone, set()))
         shared_addr = len(address_to_custs.get(addr.normalized_hash, set()))
         shared_dev = len(device_to_custs.get(dev.device_hash, set()))
-        ring_size = max(shared_phone, shared_addr, shared_dev)
 
         ring_key = addr.normalized_hash
         ring_hist = completed_orders_by_ring.get(ring_key, [])
@@ -252,7 +251,6 @@ def compute_point_in_time_features(
             "shared_phone_accounts": shared_phone,
             "shared_address_accounts": shared_addr,
             "shared_device_accounts": shared_dev,
-            "ring_size": ring_size,
             "ring_return_rate": ring_return_rate,
         }
         feature_rows.append(feature_row)
@@ -265,9 +263,11 @@ def compute_point_in_time_features(
             "outcome_type": lbl.outcome_type,
             "outcome_time": lbl.outcome_time.isoformat(),
             "label_delay_days": lbl.label_delay_days,
-            "loss_amount": 180.0
-            if (lbl.y == 1 and order.channel == "cod")
-            else (450.0 if lbl.y == 1 else 0.0),
+            "loss_amount": (
+                180.0
+                if (lbl.y == 1 and order.channel == "cod")
+                else (450.0 if lbl.y == 1 else 0.0)
+            ),
         }
         label_rows.append(label_row)
 
@@ -347,6 +347,10 @@ def generate_dataset(
 
     all_orders = orders + o1 + o2 + o3 + o4 + o5 + o6 + o7
     all_labels = labels + l1 + l2 + l3 + l4 + l5 + l6 + l7
+
+    # Re-index address and device maps after ring injection so ring addresses/devices are present
+    addr_map = {a.customer_id: a for a in addresses}
+    dev_map = {d.customer_id: d for d in devices}
 
     # 5. Point-in-time featurization
     df_features, df_labels = compute_point_in_time_features(

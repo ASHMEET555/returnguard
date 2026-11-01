@@ -34,18 +34,18 @@ Do **one phase at a time**. Tick exit criteria before moving on. Phase **C** is 
 
 ### Build checklist
 
-- [ ] `rules/` spike engine + `config.yaml` thresholds
-- [ ] Unit tests: burst fixture hits; clean fixture does not
-- [ ] `rings/` builder: phone, address and device edges → components
-- [ ] Unit test: shared-address ring of size ≥ 3 is discovered
-- [ ] `features/builder.py`: `build(order_id, as_of)` → 15–20 vector, with `channel`
-- [ ] Persist `feature_snapshot` JSON for audit
-- [ ] CLI script: print features and rule_hits for sample orders (COD and PayPal)
+- [x] `rules/` spike engine + `config.yaml` thresholds
+- [x] Unit tests: burst fixture hits; clean fixture does not
+- [x] `rings/` builder: phone, address and device edges → components
+- [x] Unit test: shared-address ring of size ≥ 3 is discovered
+- [x] `features/builder.py`: `build(order_id, as_of)` → 15–20 vector, with `channel`
+- [x] Persist `feature_snapshot` JSON for audit
+- [x] CLI script: print features and rule_hits for sample orders (COD and PayPal)
 
 ### Exit criteria
 
-- [ ] Same `order_id` + `as_of` → deterministic features
-- [ ] Spike and ring demos work **without** ML
+- [x] Same `order_id` + `as_of` → deterministic features
+- [x] Spike and ring demos work **without** ML
 
 **Next:** Phase C
 

@@ -45,7 +45,7 @@ One model, `channel` as a feature. Report metrics per channel and overall. Do no
 1. Customer starts checkout on the Next.js page. Client calls `POST /v1/payments/create`.
 2. Backend creates a PayPal order (`intent` = `AUTHORIZE` when `SHADOW_MODE=false`, otherwise `CAPTURE`) and stores `payment` with `status = created`.
 3. Buyer approves in the PayPal sandbox checkout. Backend receives the approval.
-4. Score the order as-of now (features + rules). Write `audit_score_event`.
+4. Score the order as-of now (features + rules). Write `audit_score_events`.
 5. Policy decides:
    - `allow`, `info`: capture (or authorize, then capture).
    - `warning`: `step_up_verify` shown to the merchant. Capture waits for the merchant's choice.
@@ -68,7 +68,7 @@ One model, `channel` as a feature. Report metrics per channel and overall. Do no
 3. FeatureBuilder as-of `order_time`, joined with batch ring features.
 4. Model `predict_proba` → `risk_score`. If the model is missing, fall back to rules-only severity.
 5. Policy → severity + `suggested_action`.
-6. Append `audit_score_event`.
+6. Append `audit_score_events`.
 7. Return JSON. Never block money in shadow mode.
 
 **Invariants**
