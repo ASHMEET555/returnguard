@@ -9,11 +9,15 @@ Phase 8 instruction against re-implementing decision logic in the API layer.
 
 import os
 
-BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # merchantshield-ai/backend/
+BACKEND_DIR = os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__))
+)  # merchantshield-ai/backend/
 PROJECT_ROOT = os.path.dirname(BACKEND_DIR)  # merchantshield-ai/
 
 MODEL_PATH = os.path.join(PROJECT_ROOT, "ml", "models", "candidate_lgbm_v1.pkl")
-MODEL_METADATA_PATH = os.path.join(PROJECT_ROOT, "ml", "models", "lgbm_v1_metadata.json")
+MODEL_METADATA_PATH = os.path.join(
+    PROJECT_ROOT, "ml", "models", "lgbm_v1_metadata.json"
+)
 
 AUDIT_DB_DIR = os.path.join(PROJECT_ROOT, "backend", "data")
 AUDIT_DB_PATH = os.path.join(AUDIT_DB_DIR, "audit.db")
@@ -27,3 +31,6 @@ API_DESCRIPTION = (
     "Strictly detect/flag/recommend — never performs an irreversible financial action."
 )
 API_VERSION = "1.0.0"
+
+# Shadow mode: when True, decisions/soft actions do not alter payment outcomes
+SHADOW_MODE: bool = os.getenv("SHADOW_MODE", "true").lower() in ("true", "1", "yes")
