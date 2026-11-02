@@ -16,7 +16,7 @@ from dataclasses import asdict, dataclass, field
 import datetime
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 
 class UnionFind:
