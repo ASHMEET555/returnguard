@@ -1,0 +1,176 @@
+================================================================================
+ReturnGuard Phase B: 10-Sample Inspection and Explainability Trace
+================================================================================
+Model: LightGBM Candidate (frozen) | Threshold: 0.40
+Split: Test Set (Days 50-59) - Demonstration Only
+
+[01/10] Transaction ID: txn_0000070 | Actual Ground Truth: LEGITIMATE (0)
+      Customer: cust_00000 | Amount: Rs864.16 | Timestamp: 2026-05-21 15:45:09
+      Feature Completeness: 1.00 (0 missing fields)
+      Rule Hits: None | Ring ID: null
+      Policy Trace:
+        - Model Probability: 0.1449 (Threshold: 0.40)
+        - Action: ALLOW | Rule ID: LOW_ALLOW
+        - Policy Reason: Fraud probability is below 0.15; no additional friction is warranted.
+      Top SHAP Feature Attributions:
+        * amount_zscore = -0.34 -> increases_risk (SHAP: +2.0452)
+        * amount_vs_avg_ratio = 0.35 -> increases_risk (SHAP: +1.9131)
+        * account_age_days = 579.66 -> decreases_risk (SHAP: -1.8229)
+      Human-Readable Narrative:
+        - Transaction amount is 0.3 standard deviations below this customer's historical average, which increased risk
+        - Transaction amount is 0.4x the customer's historical average amount, which increased risk
+        - Account age is 580 days, which decreased risk
+--------------------------------------------------------------------------------
+[02/10] Transaction ID: txn_0000071 | Actual Ground Truth: LEGITIMATE (0)
+      Customer: cust_00000 | Amount: Rs2,101.93 | Timestamp: 2026-05-23 00:20:34
+      Feature Completeness: 1.00 (0 missing fields)
+      Rule Hits: None | Ring ID: null
+      Policy Trace:
+        - Model Probability: 0.0090 (Threshold: 0.40)
+        - Action: ALLOW | Rule ID: LOW_ALLOW
+        - Policy Reason: Fraud probability is below 0.15; no additional friction is warranted.
+      Top SHAP Feature Attributions:
+        * account_age_days = 581.01 -> decreases_risk (SHAP: -1.9030)
+        * amount_zscore = -0.07 -> increases_risk (SHAP: +1.4386)
+        * amount = 2101.93 -> increases_risk (SHAP: +0.8456)
+      Human-Readable Narrative:
+        - Account age is 581 days, which decreased risk
+        - Transaction amount is 0.1 standard deviations below this customer's historical average, which increased risk
+        - Transaction amount (Rs2,102) increased risk
+--------------------------------------------------------------------------------
+[03/10] Transaction ID: txn_0000072 | Actual Ground Truth: LEGITIMATE (0)
+      Customer: cust_00000 | Amount: Rs1,631.27 | Timestamp: 2026-05-24 22:49:58
+      Feature Completeness: 1.00 (0 missing fields)
+      Rule Hits: None | Ring ID: null
+      Policy Trace:
+        - Model Probability: 0.1428 (Threshold: 0.40)
+        - Action: ALLOW | Rule ID: LOW_ALLOW
+        - Policy Reason: Fraud probability is below 0.15; no additional friction is warranted.
+      Top SHAP Feature Attributions:
+        * amount_zscore = -0.17 -> increases_risk (SHAP: +2.1193)
+        * account_age_days = 582.95 -> decreases_risk (SHAP: -1.7417)
+        * amount_vs_avg_ratio = 0.68 -> increases_risk (SHAP: +1.1978)
+      Human-Readable Narrative:
+        - Transaction amount is 0.2 standard deviations below this customer's historical average, which increased risk
+        - Account age is 583 days, which decreased risk
+        - Transaction amount is 0.7x the customer's historical average amount, which increased risk
+--------------------------------------------------------------------------------
+[04/10] Transaction ID: txn_0000073 | Actual Ground Truth: LEGITIMATE (0)
+      Customer: cust_00000 | Amount: Rs1,273.02 | Timestamp: 2026-05-24 01:47:29
+      Feature Completeness: 1.00 (0 missing fields)
+      Rule Hits: None | Ring ID: null
+      Policy Trace:
+        - Model Probability: 0.3798 (Threshold: 0.40)
+        - Action: ALLOW_WITH_MONITORING | Rule ID: MEDIUM_MONITOR
+        - Policy Reason: Fraud probability is elevated above baseline (0.15) but below the decision threshold (0.4); transaction is allowed but flagged for monitoring rather than immediate friction.
+      Top SHAP Feature Attributions:
+        * amount_zscore = -0.25 -> increases_risk (SHAP: +2.4156)
+        * amount_vs_avg_ratio = 0.52 -> increases_risk (SHAP: +2.2142)
+        * account_age_days = 582.07 -> decreases_risk (SHAP: -1.7782)
+      Human-Readable Narrative:
+        - Transaction amount is 0.3 standard deviations below this customer's historical average, which increased risk
+        - Transaction amount is 0.5x the customer's historical average amount, which increased risk
+        - Account age is 582 days, which decreased risk
+--------------------------------------------------------------------------------
+[05/10] Transaction ID: txn_0000074 | Actual Ground Truth: LEGITIMATE (0)
+      Customer: cust_00000 | Amount: Rs1,335.78 | Timestamp: 2026-05-25 00:57:10
+      Feature Completeness: 1.00 (0 missing fields)
+      Rule Hits: None | Ring ID: null
+      Policy Trace:
+        - Model Probability: 0.0752 (Threshold: 0.40)
+        - Action: ALLOW | Rule ID: LOW_ALLOW
+        - Policy Reason: Fraud probability is below 0.15; no additional friction is warranted.
+      Top SHAP Feature Attributions:
+        * account_age_days = 583.04 -> decreases_risk (SHAP: -1.8559)
+        * amount_zscore = -0.23 -> increases_risk (SHAP: +1.5895)
+        * amount_vs_avg_ratio = 0.56 -> increases_risk (SHAP: +1.1276)
+      Human-Readable Narrative:
+        - Account age is 583 days, which decreased risk
+        - Transaction amount is 0.2 standard deviations below this customer's historical average, which increased risk
+        - Transaction amount is 0.6x the customer's historical average amount, which increased risk
+--------------------------------------------------------------------------------
+[06/10] Transaction ID: txn_0005420 | Actual Ground Truth: FRAUD (1)
+      Customer: cust_00054 | Amount: Rs8.92 | Timestamp: 2026-05-21 02:00:22
+      Feature Completeness: 1.00 (0 missing fields)
+      Rule Hits: None | Ring ID: null
+      Policy Trace:
+        - Model Probability: 0.2298 (Threshold: 0.40)
+        - Action: ALLOW_WITH_MONITORING | Rule ID: MEDIUM_MONITOR
+        - Policy Reason: Fraud probability is elevated above baseline (0.15) but below the decision threshold (0.4); transaction is allowed but flagged for monitoring rather than immediate friction.
+      Top SHAP Feature Attributions:
+        * amount = 8.92 -> increases_risk (SHAP: +2.0681)
+        * account_age_days = 529.08 -> decreases_risk (SHAP: -1.5094)
+        * hour_of_day = 2.00 -> increases_risk (SHAP: +1.1467)
+      Human-Readable Narrative:
+        - Transaction amount (Rs9) increased risk
+        - Account age is 529 days, which decreased risk
+        - Transaction occurred at hour 2 of the day, which increased risk
+--------------------------------------------------------------------------------
+[07/10] Transaction ID: txn_0005421 | Actual Ground Truth: FRAUD (1)
+      Customer: cust_00054 | Amount: Rs38.44 | Timestamp: 2026-05-21 03:30:50
+      Feature Completeness: 1.00 (0 missing fields)
+      Rule Hits: None | Ring ID: null
+      Policy Trace:
+        - Model Probability: 0.7350 (Threshold: 0.40)
+        - Action: STEP_UP_VERIFICATION | Rule ID: HIGH_STEP_UP
+        - Policy Reason: Fraud probability is at or above the frozen cost-optimal decision threshold (0.4), warranting additional verification before the transaction proceeds.
+      Top SHAP Feature Attributions:
+        * amount = 38.44 -> increases_risk (SHAP: +3.7835)
+        * account_age_days = 529.15 -> decreases_risk (SHAP: -1.3534)
+        * failed_ratio_trailing10 = 0.30 -> increases_risk (SHAP: +1.2783)
+      Human-Readable Narrative:
+        - Transaction amount (Rs38) increased risk
+        - 30% of this customer's recent transactions failed, which increased risk
+        - Transaction amount is 0.1x the customer's historical average amount, which increased risk
+--------------------------------------------------------------------------------
+[08/10] Transaction ID: txn_0005422 | Actual Ground Truth: FRAUD (1)
+      Customer: cust_00054 | Amount: Rs38.68 | Timestamp: 2026-05-21 13:36:08
+      Feature Completeness: 1.00 (0 missing fields)
+      Rule Hits: None | Ring ID: null
+      Policy Trace:
+        - Model Probability: 0.9829 (Threshold: 0.40)
+        - Action: BLOCK | Rule ID: CRITICAL_BLOCK
+        - Policy Reason: Fraud probability is at or above the configured blocking boundary (0.8), where validation precision is high enough that most flagged transactions at this confidence level are genuinely fraudulent.
+      Top SHAP Feature Attributions:
+        * failed_ratio_trailing10 = 0.50 -> increases_risk (SHAP: +4.8199)
+        * amount = 38.68 -> increases_risk (SHAP: +3.5516)
+        * account_age_days = 529.57 -> decreases_risk (SHAP: -1.1642)
+      Human-Readable Narrative:
+        - 50% of this customer's recent transactions failed, which increased risk
+        - Transaction amount (Rs39) increased risk
+        - Transaction amount is 2.0 standard deviations below this customer's historical average, which increased risk
+--------------------------------------------------------------------------------
+[09/10] Transaction ID: txn_0005423 | Actual Ground Truth: FRAUD (1)
+      Customer: cust_00054 | Amount: Rs23.51 | Timestamp: 2026-05-21 04:39:55
+      Feature Completeness: 1.00 (0 missing fields)
+      Rule Hits: None | Ring ID: null
+      Policy Trace:
+        - Model Probability: 0.9594 (Threshold: 0.40)
+        - Action: BLOCK | Rule ID: CRITICAL_BLOCK
+        - Policy Reason: Fraud probability is at or above the configured blocking boundary (0.8), where validation precision is high enough that most flagged transactions at this confidence level are genuinely fraudulent.
+      Top SHAP Feature Attributions:
+        * amount = 23.51 -> increases_risk (SHAP: +4.0415)
+        * failed_ratio_trailing10 = 0.40 -> increases_risk (SHAP: +2.2204)
+        * account_age_days = 529.19 -> decreases_risk (SHAP: -1.4136)
+      Human-Readable Narrative:
+        - Transaction amount (Rs24) increased risk
+        - 40% of this customer's recent transactions failed, which increased risk
+        - Transaction amount is 0.1x the customer's historical average amount, which increased risk
+--------------------------------------------------------------------------------
+[10/10] Transaction ID: txn_0005424 | Actual Ground Truth: FRAUD (1)
+      Customer: cust_00054 | Amount: Rs23.68 | Timestamp: 2026-05-21 20:47:01
+      Feature Completeness: 1.00 (0 missing fields)
+      Rule Hits: None | Ring ID: null
+      Policy Trace:
+        - Model Probability: 0.9971 (Threshold: 0.40)
+        - Action: BLOCK | Rule ID: CRITICAL_BLOCK
+        - Policy Reason: Fraud probability is at or above the configured blocking boundary (0.8), where validation precision is high enough that most flagged transactions at this confidence level are genuinely fraudulent.
+      Top SHAP Feature Attributions:
+        * failed_ratio_trailing10 = 0.70 -> increases_risk (SHAP: +6.4857)
+        * amount = 23.68 -> increases_risk (SHAP: +3.6568)
+        * account_age_days = 529.87 -> decreases_risk (SHAP: -1.0825)
+      Human-Readable Narrative:
+        - 70% of this customer's recent transactions failed, which increased risk
+        - Transaction amount (Rs24) increased risk
+        - Transaction amount is 0.1x the customer's historical average amount, which increased risk
+--------------------------------------------------------------------------------
