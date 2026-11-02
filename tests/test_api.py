@@ -67,6 +67,10 @@ def test_api_root_endpoint(client):
     assert "service" in r.json()
 
 
+@pytest.mark.skipif(
+    not os.path.isdir("frontend/dist"),
+    reason="Frontend not adopted per codemap",
+)
 def test_root_serves_frontend_when_built(client):
     # frontend/dist exists in this environment (built during Phase 9) -- "/"
     # should serve the built index.html, not the JSON service-identification body.
