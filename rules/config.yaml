@@ -2,12 +2,3 @@
 spike_velocity:
   max_orders_24h: 5
   max_orders_7d: 15
-
-spike_cod_heavy:
-  min_orders_7d: 3
-  cod_share_threshold: 0.80
-
-spike_micro:
-  min_returns_30d: 3
-  micro_return_pct_threshold: 0.60
-  max_micro_order_value: 300

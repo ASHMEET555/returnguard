@@ -333,19 +333,25 @@ class AuditScoreEvent(Base):
     __tablename__ = "audit_score_events"
 
     id = Column(String(64), primary_key=True)
+    decision_id = Column(String(64), nullable=True, index=True)
     order_id = Column(String(64), ForeignKey("orders.id"), nullable=False)
-    channel = Column(String(32), nullable=False)
+    channel = Column(String(32), default="paypal", nullable=False)
     risk_score = Column(Numeric(6, 4), nullable=False)
-    severity = Column(String(32), nullable=False)
-    suggested_action = Column(String(32), nullable=False)
-    reason_codes_json = Column(Text, nullable=False)
-    rule_hits_json = Column(Text, nullable=False)
-    feature_snapshot_json = Column(
-        JSON().with_variant(JSONB, "postgresql"), nullable=True
-    )
+    tier = Column(String(32), default="LOW", nullable=False)
+    policy_rule = Column(String(64), default="ALLOW_NORMAL", nullable=False)
+    policy_action = Column(String(64), default="ALLOW", nullable=False)
+    severity = Column(String(32), default="allow", nullable=False)
+    suggested_action = Column(String(32), default="allow", nullable=False)
+    model_version = Column(String(64), default="candidate_lgbm_v1", nullable=False)
+    threshold = Column(Numeric(5, 4), default=0.40, nullable=False)
+    model_status = Column(String(32), default="loaded", nullable=False)
+    feature_completeness = Column(Numeric(5, 4), default=1.0, nullable=False)
+    explanation_status = Column(String(32), default="available", nullable=False)
+    reason_codes_json = Column(Text, nullable=True)
+    rule_hits_json = Column(Text, nullable=True)
+    feature_snapshot_json = Column(Text, nullable=True)
     ring_id = Column(String(64), nullable=True)
-    shadow = Column(Integer, default=1, nullable=False)  # 1 for true, 0 for false
-    model_version = Column(String(64), nullable=False)
+    shadow = Column(Integer, default=1, nullable=False)
     created_at = Column(
         DateTime(timezone=True),
         default=lambda: datetime.datetime.now(datetime.UTC),

@@ -1,1 +1,1 @@
-"""Machine learning package for ReturnGuard."""
+# MerchantShield AI — ml package root

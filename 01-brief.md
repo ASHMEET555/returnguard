@@ -1,158 +1,137 @@
-# 01 — Brief, rules, decisions, definition of done
+# 01 — Brief, locks, decisions, Definition of Done (ML-layer update)
 
-Read this once before Phase A. Re-check the rules and DoD before submission.
-
----
-
-## Hackathon rules that shape the build
-
-Source: hackathon brief (Build What's Next with PayPal and AI).
-
-| Rule | What it means for ReturnGuard |
-|------|-------------------------------|
-| Must meaningfully use PayPal | PayPal Orders API (sandbox) is in the live payment path, not a decorative button |
-| Must meaningfully use AI | XGBoost risk model + LLM investigation/evidence assistant |
-| Working prototype | Judges can run it locally or use a hosted URL |
-| Functional demo | Setup + run instructions in the repo, or hosted demo. Mockups do not count |
-| Tools section | List every AI/model service and how it is used |
-| Public repo | GitHub, GitLab or Bitbucket. All source, assets and run instructions included |
-| License file | Visible at top of repo (About section) |
-| Demo video | Under 3 minutes, shows the project on the device it was built for, uploaded to YouTube publicly, link on the form |
-| Third-party material | No trademarks or copyrighted material without permission (see brand note below) |
-| Text description | Features, functionality, tools used |
-
-**Brand note:** use the PayPal SDK-rendered checkout button rather than copying PayPal logos. Check PayPal brand guidelines before putting any PayPal logo in screenshots or the video. Avoid AG Grid and Gemini/OpenAI logos unless their brand rules allow them.
-
-**Deadline:** the brief in the uploaded pack does not give a submission date. Confirm the deadline on the hackathon page before locking the phase calendar.
+Read once before Phase A. Re-check before submission.
 
 ---
 
-## Track 02 bar (must ship, unchanged)
+## 1. What we are building
 
-| Requirement | Proof judges see |
-|-------------|------------------|
-| One class of loss | Return / RTO / refund abuse, stated in README and demo |
-| Working detector or verifier | Live `POST /v1/score` + evidence pack API |
-| Precision & recall on held-out set | `reports/holdout_metrics.md` + split method |
-| Honest false-positive cost | ₹ model + threshold / Net table |
-| Defense-only | Soft actions + human approve; no attack tools |
+**ReturnGuard / MerchantShield ML layer on the PayPal + AI hackathon plan.** The product is a payment fraud risk layer for a merchant using PayPal sandbox orders. It estimates fraud probability for each order, explains the estimate with SHAP, and recommends an action. The merchant executes the action. The system does not move money, cancel orders, or file disputes on its own.
 
-The PayPal layer does not replace this bar. It sits on top of it.
+Hackathon: **Build What's Next with PayPal and AI.** The project must meaningfully use PayPal and AI. PayPal and AG Grid are compulsory and stay in the plan as written.
+
+**Loss class (ML target):** card-not-present payment fraud, including chargebacks. This replaces the original return-abuse target (decision M1).
 
 ---
 
-## Product locks
+## 2. Track bar (must ship)
+
+| Requirement | Proof |
+|-------------|-------|
+| One loss class stated clearly | README and demo open with it |
+| Working detector with explainable output | `POST /v1/score` returns probability, severity, suggested action, SHAP reasons |
+| Precision and recall on a held-out set | `reports/holdout_metrics.md` and `.json`, synthetic and IEEE in separate sections, with split method |
+| Honest false-positive cost | ₹ cost at the operating threshold, from the verified cost model |
+| Defense-only | Recommendation actions, shadow default, human approval for external action |
+
+---
+
+## 3. Product locks (ML rows changed)
 
 | Decision | Choice |
 |----------|--------|
-| Name | **ReturnGuard** |
-| Primary loss class | Return / RTO / refund abuse (applies to COD orders and PayPal orders) |
-| Primary artifact | Detector: risk score 0–1 + severity + reasons |
-| Secondary artifact | Dispute **evidence pack** with a human approve step |
-| Payment channels | `cod` (legacy, original features) and `paypal` (new, sandbox) |
-| Stance | Shadow-first; soft actions only |
-| Model | XGBoost (or HistGB) primary; logistic regression baseline; one model with `channel` feature, metrics reported per channel |
-| Feature budget | 15–20 features per channel, plus payment features where available |
-| Score timing | Order create (pre-dispatch). For PayPal, also after authorize and before capture |
-| Repo | New greenfield. Patterns only, no copied code from other projects |
-| Frontend | Next.js + React, AG Grid Community as the core grid |
-| LLM | Gemini or OpenAI. Explains and drafts. Never decides risk |
+| Primary model | LightGBM (verified). Random Forest and logistic regression are baselines in the same lift table |
+| Feature set | Verified 15 causal features. IEEE variant adds `card_product_share` and is versioned separately |
+| Datasets | Synthetic (verified generator, seed 42) and IEEE-CIS (`IEEE_DATA_DIR`) |
+| Cost model | FP = ₹50, FN = 50% of amount (verified). Threshold chosen on validation to minimise cost, subject to a recall constraint |
+| Policy | Verified five-rule policy: `BLOCK`, `STEP_UP_VERIFICATION`, `ALLOW_WITH_MONITORING`, `ALLOW` |
+| Severity and suggested action | Derived from the policy action (table in section 4) |
+| Explainability | TreeSHAP for the shipping LightGBM artifact, plus verified additivity check. Deterministic templates, not an LLM |
+| Stance | Shadow default on. Recommendations only |
+| Frontend | AG Grid Community console (original plan, Phase F). Verified React dashboard is not adopted |
+| LLM | Gemini or OpenAI. Explains and drafts. Never decides risk, severity or action |
 
-### Severity → soft action
+### 3.1 Policy rules (verified, unchanged)
 
-| Band | Score | Action |
-|------|-------|--------|
-| `none` | < 0.30 | `allow` |
-| `info` | 0.30–0.50 | `allow` + log |
-| `warning` | 0.50–0.67 | `step_up_verify` or `prefer_prepaid` |
-| `critical` | ≥ 0.67 | `manual_review` |
+| Order | Condition | Action |
+|-------|-----------|--------|
+| 1 | probability ≥ 0.80 | `BLOCK` |
+| 2 | probability ≥ 0.40 | `STEP_UP_VERIFICATION` |
+| 3 | probability ≥ 0.15 and amount ≥ amount threshold | `STEP_UP_VERIFICATION` |
+| 4 | probability ≥ 0.15 | `ALLOW_WITH_MONITORING` |
+| 5 | otherwise | `ALLOW` |
 
-On a PayPal order, `manual_review` holds the capture. It does not reject the buyer.
+Operating threshold for the policy decision point: τ = 0.40 on synthetic validation (recall constraint). IEEE artifact τ = 0.35 (Phase 17). Each artifact keeps its own threshold. Thresholds are never shared silently.
 
----
+Amount threshold: ₹25,000 for synthetic. For IEEE, the amount threshold is chosen on validation and documented, because the IEEE currency is not stated (decision M4).
 
-## Plan review decisions
-
-Each recommendation from the PayPal/AG Grid plan was checked against the original build pack, the hackathon rules and the current PayPal and AG Grid docs.
-
-| # | Recommendation | Decision | Reason |
-|---|----------------|----------|--------|
-| 1 | Keep ReturnGuard as the core project | **Accepted** | Strong existing base; the rules want a meaningful PayPal and AI use, which this adds |
-| 2 | PayPal Orders API for checkout and capture | **Accepted** | Core PayPal use. Sandbox only |
-| 3 | Authorize, then score, then capture | **Modified** | Good idea. Only active when `SHADOW_MODE=false`. In shadow, capture normally and log the score. PayPal holds authorizations up to 29 days, and capture is recommended within about 3 days (verify on the current PayPal page before relying on it) |
-| 4 | PayPal Webhooks for lifecycle events | **Accepted** | Verify signatures, process idempotently by event ID |
-| 5 | PayPal Disputes API: retrieve and submit evidence | **Accepted, gated** | Real endpoint: `POST /v1/customer/disputes/{id}/provide-evidence` (multipart with an `input` JSON field and optional evidence file). Merchants can only provide evidence when the dispute is `WAITING_FOR_SELLER_RESPONSE`. Submission is behind `PAYPAL_SUBMIT_ENABLED=false` by default |
-| 6 | Visa CE 3.0-style match matrix as the evidence logic for PayPal disputes | **Modified** | PayPal disputes use PayPal evidence types (for example `PROOF_OF_FULFILLMENT`, `PROOF_OF_REFUND`). The CE 3.0 matrix is a card-network rule. Keep it as an optional "prior-order match" helper, and map evidence to PayPal types |
-| 7 | AG Grid as the primary investigation console | **Accepted** | Fits the investigation need |
-| 8 | Master-detail expandable rows for the investigation view | **Modified** | Master-detail is an **AG Grid Enterprise** feature. Community edition is MIT and free. Use Community with a React detail drawer. Enterprise only if a trial licence is available and the key is kept out of the repo (see 02) |
-| 9 | Row grouping, Excel export, server-side model in the console | **Modified** | All Enterprise features. Use client-side filtering, sorting, pagination and custom cell renderers instead |
-| 10 | XGBoost for risk, LLM for explanation | **Accepted** | Matches the original separation. Add deterministic checks so the LLM cannot cite IDs that do not exist |
-| 11 | Human approval before any dispute submit | **Accepted, updated** | Original Phase D only logged approval. Updated: approve records the decision, then a separate submit call sends it. Submit is sandbox-gated and off by default |
-| 12 | Extend PostgreSQL with payment, event, dispute, evidence and audit entities | **Accepted** | Needed for the PayPal path |
-| 13 | Do not assume PayPal gives device, IP or behaviour data | **Accepted** | Use application-side records. For PayPal orders, many COD features are null, so the model uses a channel flag and reports metrics per channel |
-| 14 | Prioritise Phases A–C, then PayPal, then AG Grid, then LLM, then disputes | **Accepted** | Same order, plus policy/audit kept before the UI |
-| 15 | Prize references ($69,750 total, $5,000 AG Grid prize) | **Partly verified** | $69,750 total is in the uploaded brief. The AG Grid prize amount is from the plan only and is not in the uploaded brief. Confirm on the hackathon page |
-| 16 | Elastic or APIMatic as alternatives | **Not used** | Stay focused. One sponsor tool (AG Grid) is enough |
-| 17 | Offer the Razorpay / other-ecosystem positioning | **Kept as note** | Positioning: a measured return-risk detector with hold-out P/R and FP cost, not a clone |
-
-### What the plan missed (added by this review)
-
-- **Channel mismatch:** PayPal orders are prepaid, so the COD/RTO label does not apply to them. Define a separate label for PayPal: refund after delivery, or return with no receipt, within the outcome window. Train one model with a `channel` feature and report metrics per channel.
-- **Sandbox data is synthetic:** PayPal sandbox disputes must be created manually or through sandbox-only endpoints. Seed disputes and orders with the synthetic generator so the demo is reproducible.
-- **Authorize timing and shadow mode conflict:** a hold that waits on a human review can expire. Set a review SLA, or capture by default in shadow mode.
-- **Evidence must come from records, not the LLM:** every delivery number, tracking ID and address in an evidence pack must trace to a stored row.
-- **Public repo hygiene:** no PayPal client secrets, Gemini/OpenAI keys or AG Grid license keys in the repo. Use `.env.example`.
+`BLOCK` means "recommend decline to the merchant." It holds a PayPal capture for merchant review. It does not reject the buyer or move money.
 
 ---
 
-## Track example directions (all appear in one product)
+## 4. Severity and suggested action (replaces the old score bands)
 
-### Return-risk scorer (PRIMARY)
+| Policy action | Severity | Suggested action | Money-path effect (Phase D) |
+|---------------|----------|------------------|-----------------------------|
+| `BLOCK` | `critical` | `manual_review` | Capture held until merchant decides |
+| `STEP_UP_VERIFICATION` | `warning` | `step_up_verify` | Merchant prompt shown; capture waits |
+| `ALLOW_WITH_MONITORING` | `info` | `allow` (+ log) | Capture proceeds |
+| `ALLOW` | `none` | `allow` | Capture proceeds |
 
-Score orders early enough to intervene. Hybrid rules + behavioural ML. Output probability, tier and reason codes. Proportional friction, and no punishment of good customers.
-
-### Fraud-spike detector
-
-Windowed velocity, COD-heavy and micro-return rules → `spike_alert` + `evidence_json`. Feeds numeric features into the scorer. Demoable alone.
-
-### Abuse-ring sentinel
-
-Shared phone, address or device across accounts. Batch connected components → `ring_id` + graph features. Flags for review only.
-
-### Dispute evidence responder (VERIFIER)
-
-Given a PayPal dispute and its order, draft an evidence pack mapped to PayPal evidence types, with a checklist, history and risk score. Heuristic `win_likelihood`. Human approves before any sandbox submit.
+Severity is derived from the policy action in code. It can never disagree with the action.
 
 ---
 
-## Ecosystem note
+## 5. Changes from the original plan (ML layer only)
 
-Other payment platforms market similar return and dispute products. Position ReturnGuard as a **measured** return-risk detector and evidence verifier, with hold-out precision and recall, FP cost and a Net ₹ table. Do not present it as a clone of anyone's product.
-
----
-
-## Definition of done
-
-- [ ] One loss class stated clearly
-- [ ] Detector API with explainable reasons
-- [ ] Spike + ring visible in API and UI
-- [ ] PayPal sandbox order created, authorized or captured through ReturnGuard's policy
-- [ ] PayPal webhook signature verified; duplicate event replay is a no-op
-- [ ] AG Grid console: filter, sort, pagination, detail drawer, high-risk highlighting
-- [ ] Evidence pack mapped to PayPal evidence types, with human approve
-- [ ] Sandbox submit works only when `PAYPAL_SUBMIT_ENABLED=true`
-- [ ] LLM explains a flag using only stored record IDs (deterministic check passes)
-- [ ] Held-out precision and recall published, per channel
-- [ ] FP cost and Net ₹ vs threshold published
-- [ ] Shadow / defense-only default
-- [ ] No secrets in repo; `.env.example` present
-- [ ] LICENSE file at repo root and set in GitHub About
-- [ ] Demo video under 3 minutes, uploaded to YouTube publicly, link in form
-- [ ] Text description and Tools section written
-- [ ] 5-minute reproducible demo from a clean clone
+| Original | Now | Reason |
+|----------|-----|--------|
+| XGBoost primary | LightGBM (verified) | Verified accuracy and tests |
+| Return-abuse target | Payment fraud / chargebacks | Matches the verified datasets |
+| COD/PayPal feature set (25) | Verified 15 + IEEE variant | Frozen, reproducible |
+| Score bands 0.30 / 0.50 / 0.67 | Policy-derived severity | One source of truth for actions |
+| RTO Net ₹ formula | Verified cost model | Card-fraud relevant |
+| Spike and cod-heavy rules as model inputs | Rules are evidence only; velocity is also a model feature | Keeps the model frozen and the rules auditable |
+| Abuse-ring as model input | Display-only ring module | Used by the demo; not a model input |
+| Rules-only fallback | Amount-only fallback, never `BLOCK` | Safe fallback |
 
 ---
 
-## What not to build in v1
+## 6. Open decisions (ML layer)
 
-Redis real-time micro-batch p95, Kafka, investigation outbox, ClickHouse warehouse, full RBAC, live card-network submit, offense tooling, automated dispute filing, AG Grid Enterprise features as a requirement, Elastic or APIMatic integrations, multi-currency settlement.
+| # | Decision | Recommendation | Blocks |
+|---|----------|----------------|--------|
+| M1 | Loss class: payment fraud (recommended) vs return abuse | Payment fraud. Confirm PayPal dispute reason names in sandbox | Phase A |
+| M2 | IEEE recall 79.8% vs the 80% constraint | Relax to 0.78 for IEEE with user approval, or select a model that meets 0.80 | Phase C |
+| M3 | IEEE precision target | Set a number, or "beat 6.3% on validation; report test honestly" | Phase C |
+| M4 | IEEE amount currency and amount threshold | Validation-chosen threshold, currency marked UNVERIFIED | Phase C |
+| M5 | Database | PostgreSQL per original stack. Verified audit tested on both SQLite and PostgreSQL | Phase A |
+| M6 | Vector DB and SaaS tenancy | Not added (Phase E and G locked). Revisit only if those phases may change | Not in scope |
+| M7 | Hackathon and sponsor rules | PayPal + AI, as in the original plan | Closed |
+
+Agents stop and ask before resolving any of M1–M6.
+
+---
+
+## 7. Verification items (Phase A records results)
+
+1. `scale_pos_weight = 73.12` against the training-split prevalence.
+2. IEEE boundary at day 110: inclusive or exclusive, and non-overlapping intervals.
+3. Pytest baseline: 269 passing across 8 files.
+4. Phase 17 cost: 2,469,531 cost units. With FP = ₹50 and 48,139 FP, FP cost is 2,406,950. The remainder (62,581 units) implies FN amounts of about 125,162 total across 821 FN. Verify this decomposition against the stored predictions before reporting it.
+5. PayPal 3-day honor period on the current PayPal page. Mark `UNVERIFIED` until confirmed.
+6. Dispute reason and evidence type names in the PayPal sandbox (needed by Phase G).
+
+---
+
+## 8. Definition of Done (ML layer)
+
+- [ ] One loss class stated (payment fraud)
+- [ ] Verified ML tests pass (269 across 8 files)
+- [ ] Synthetic and IEEE metrics reproduce within tolerance
+- [ ] LightGBM, Random Forest, logistic regression and amount-only baseline in the lift table
+- [ ] IEEE precision improvement program run on validation only, all candidates logged, including failures
+- [ ] Holdout precision and recall published, synthetic and IEEE separately, with split method
+- [ ] ₹ cost table at operating thresholds, with currency note for IEEE
+- [ ] SHAP top-K and additivity check pass on the shipping artifact
+- [ ] Score API returns probability, `risk_score_100`, tier, policy rule, severity, suggested action, SHAP reasons, `model_status`, `feature_completeness`, `explanation_status`, `shadow`
+- [ ] Fallback returns amount-only result and never `BLOCK`
+- [ ] Shadow mode on by default
+- [ ] Leakage test passes for the 15 features and the IEEE variant
+- [ ] Original plan's DoD items for Phases D–H still checked as written
+
+---
+
+## 9. Out of scope (unchanged from original, plus ML)
+
+Redis or Feast online features, Kafka, ClickHouse, full RBAC, live card-network submission, automated dispute filing, offense tooling, abuse-ring as a model feature, return-abuse module, multi-currency settlement, vector DB and SaaS tenancy (M6).

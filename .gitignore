@@ -32,6 +32,15 @@ data/raw/*
 data/processed/*
 !data/processed/.gitkeep
 *.parquet
+ml/data/*.csv
+ml/external/ieee/results/
+*.ieee_cis.csv
+train_transaction.csv
+train_identity.csv
+test_transaction.csv
+test_identity.csv
+phase17_lgbm.pkl
+phase17_razorpay_results.json
 
 # Model artifacts
 ml/artifacts/*.pkl

@@ -1,7 +1,7 @@
 """Spike rules engine.
 
-Evaluates velocity, COD-heavy, and micro-return rules against order
-features or context and produces rule hits and structured evidence_json.
+Evaluates velocity spike rules against transaction context and produces
+rule hits and structured evidence_json.
 """
 
 from pathlib import Path
@@ -54,51 +54,12 @@ class SpikeRuleEngine:
                 ],
             }
 
-        # 2. spike_cod_heavy rule
-        cod_cfg = self.config.get("spike_cod_heavy", {})
-        min_orders_7d = cod_cfg.get("min_orders_7d", 3)
-        cod_share_thresh = cod_cfg.get("cod_share_threshold", 0.80)
-
-        cod_share_7d = context.get("cod_share_7d", 0.0)
-
-        if orders_7d >= min_orders_7d and cod_share_7d >= cod_share_thresh:
-            rule_hits.append("spike_cod_heavy")
-            evidence["spike_cod_heavy"] = {
-                "orders_7d": orders_7d,
-                "min_orders_7d": min_orders_7d,
-                "cod_share_7d": cod_share_7d,
-                "cod_share_threshold": cod_share_thresh,
-            }
-
-        # 3. spike_micro rule
-        micro_cfg = self.config.get("spike_micro", {})
-        min_returns_30d = micro_cfg.get("min_returns_30d", 3)
-        micro_pct_thresh = micro_cfg.get("micro_return_pct_threshold", 0.60)
-        max_micro_val = micro_cfg.get("max_micro_order_value", 300)
-
-        # Support both returns_30d and returns_7d / return counts
-        returns_30d = context.get(
-            "returns_30d",
-            context.get("returns_7d", context.get("cust_return_count", 0)),
-        )
-        micro_return_pct_30d = context.get("micro_return_pct_30d", 0.0)
-
-        if returns_30d >= min_returns_30d and micro_return_pct_30d >= micro_pct_thresh:
-            rule_hits.append("spike_micro")
-            evidence["spike_micro"] = {
-                "returns_30d": returns_30d,
-                "min_returns_30d": min_returns_30d,
-                "micro_return_pct_30d": micro_return_pct_30d,
-                "micro_return_pct_threshold": micro_pct_thresh,
-                "max_micro_order_value": max_micro_val,
-            }
-
         return rule_hits, evidence
 
 
 def evaluate_spike_rules(
     context: dict[str, Any], config_path: str | Path | None = None
 ) -> tuple[list[str], dict[str, Any]]:
-    """Helper function to evaluate spike rules."""
+    """Convenience helper to evaluate spike rules."""
     engine = SpikeRuleEngine(config_path=config_path)
     return engine.evaluate(context)
