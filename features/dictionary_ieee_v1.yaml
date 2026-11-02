@@ -1,4 +1,4 @@
-# ReturnGuard / MerchantShield IEEE-CIS Variant Feature Dictionary
+# ReturnGuard IEEE-CIS Variant Feature Dictionary
 # Source of truth: ml/external/ieee/ieee_features.py and card_product_features.py
 # Architecture reference: docs/plan/02-architecture.md section C
 

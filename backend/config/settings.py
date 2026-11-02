@@ -9,10 +9,8 @@ Phase 8 instruction against re-implementing decision logic in the API layer.
 
 import os
 
-BACKEND_DIR = os.path.dirname(
-    os.path.dirname(os.path.abspath(__file__))
-)  # merchantshield-ai/backend/
-PROJECT_ROOT = os.path.dirname(BACKEND_DIR)  # merchantshield-ai/
+BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PROJECT_ROOT = os.path.dirname(BACKEND_DIR)
 
 MODEL_PATH = os.path.join(PROJECT_ROOT, "ml", "models", "candidate_lgbm_v1.pkl")
 MODEL_METADATA_PATH = os.path.join(
@@ -23,9 +21,9 @@ AUDIT_DB_DIR = os.path.join(PROJECT_ROOT, "backend", "data")
 AUDIT_DB_PATH = os.path.join(AUDIT_DB_DIR, "audit.db")
 AUDIT_DB_URL = f"sqlite:///{AUDIT_DB_PATH}"
 
-API_TITLE = "MerchantShield AI — Risk Manager API"
+API_TITLE = "ReturnGuard — Risk Manager API"
 API_DESCRIPTION = (
-    "Defensive fraud-risk scoring API for the Razorpay AI Buildathon 2026 "
+    "Defensive fraud-risk scoring API for the PayPal AI Hackathon 2026 "
     "(Track 02 — AI Risk Manager). Scores transactions for fraud risk, explains "
     "the score with SHAP, and returns a bounded, rule-based recommended action. "
     "Strictly detect/flag/recommend — never performs an irreversible financial action."

@@ -1,1 +1,1 @@
-# MerchantShield AI — ml.evaluation package
+# ReturnGuard AI — ml.evaluation package

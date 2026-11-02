@@ -1,1 +1,1 @@
-# MerchantShield AI — ml package root
+# ReturnGuard AI — ml package root

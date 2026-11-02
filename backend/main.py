@@ -1,5 +1,5 @@
 """
-MerchantShield AI backend entry point.
+ReturnGuard AI backend entry point.
 
 Startup behavior: loads the frozen model + explainer + metadata exactly once
 (see services/model_loader.py) and opens the audit DB connection. If the model
@@ -26,13 +26,15 @@ from backend.services.audit_service import AuditStore
 from backend.api.routes import router
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("merchantshield")
+logger = logging.getLogger("returnguard")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
-        app.state.model_bundle = load_model_bundle(settings.MODEL_PATH, settings.MODEL_METADATA_PATH)
+        app.state.model_bundle = load_model_bundle(
+            settings.MODEL_PATH, settings.MODEL_METADATA_PATH
+        )
         logger.info(f"Model loaded from {settings.MODEL_PATH}")
     except ModelUnavailableError as e:
         # Do not crash the process -- come up degraded so /health reports it clearly
@@ -88,7 +90,10 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         messages.append(f"{loc}: {err.get('msg')}")
     return JSONResponse(
         status_code=422,
-        content={"error": "validation_error", "detail": "; ".join(messages) or "Invalid request body."},
+        content={
+            "error": "validation_error",
+            "detail": "; ".join(messages) or "Invalid request body.",
+        },
     )
 
 
@@ -106,9 +111,18 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
     )
 
 
-@app.get("/api", tags=["ops"], summary="API root", description="Basic service identification.")
+@app.get(
+    "/api",
+    tags=["ops"],
+    summary="API root",
+    description="Basic service identification.",
+)
 def api_root():
-    return {"service": settings.API_TITLE, "version": settings.API_VERSION, "docs": "/docs"}
+    return {
+        "service": settings.API_TITLE,
+        "version": settings.API_VERSION,
+        "docs": "/docs",
+    }
 
 
 # Serve the built frontend (frontend/dist, produced by `npm run build`) same-origin
@@ -127,11 +141,15 @@ def api_root():
 _FRONTEND_DIST = os.path.join(settings.PROJECT_ROOT, "frontend", "dist")
 if os.path.isdir(_FRONTEND_DIST):
     from fastapi.staticfiles import StaticFiles
+
     app.mount("/", StaticFiles(directory=_FRONTEND_DIST, html=True), name="frontend")
 else:
+
     @app.get("/", tags=["ops"])
     def root_no_frontend():
         return {
-            "service": settings.API_TITLE, "version": settings.API_VERSION, "docs": "/docs",
+            "service": settings.API_TITLE,
+            "version": settings.API_VERSION,
+            "docs": "/docs",
             "note": "Frontend build not found at frontend/dist -- run `npm run build` in frontend/.",
         }

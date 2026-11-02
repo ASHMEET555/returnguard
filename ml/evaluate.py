@@ -154,7 +154,7 @@ def run_evaluation():
             "false_negative_amount_fraction": 0.50,
         },
         "synthetic": {
-            "dataset_name": "MerchantShield Synthetic E-Commerce",
+            "dataset_name": "ReturnGuard Synthetic E-Commerce",
             "split_method": "Chronological (Days 0-39 Train, Days 40-49 Val, Days 50-59 Test)",
             "test_sample_count": len(test_synth),
             "fraud_count": int(y_test_s.sum()),

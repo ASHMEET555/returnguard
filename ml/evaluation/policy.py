@@ -1,5 +1,5 @@
 """
-Policy configuration for the MerchantShield decision engine.
+Policy configuration for the ReturnGuard decision engine.
 
 SOURCE OF TRUTH: raw fraud_probability from the LightGBM model, plus minimal
 transaction context (amount). The 0-100 risk_score / LOW-MEDIUM-HIGH-CRITICAL
