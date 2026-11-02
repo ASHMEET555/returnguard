@@ -1,26 +1,30 @@
-"""Ring builder using graph connected components.
+"""
+Deterministic Ring Builder using Union-Find (Display-Only).
 
-Builds deterministic graph edges across shared phone, address, and device
-attributes, computes connected components using Union-Find,
-filters components to size >= 3, and computes per-ring aggregates
-(ring_size, ring_return_rate).
-Provides an O(1) online lookup store without graph walks.
+Constructs deterministic graph edges across shared phone, address, and device attributes,
+computes connected components using Union-Find with canonical edge ordering (u < v, sorted,
+deduplicated), and assigns ring_ids (R01, R02, ...) sorted by the lexicographically
+smallest member. Components of size >= 3 receive a ring_id; smaller components do not.
+
+CRITICAL INVARIANT:
+Rings and entity graph relationships are DISPLAY-ONLY.
+They never enter the ML model input vector, probability calculation, or policy action.
 """
 
-import datetime
-import json
 from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
+import datetime
+import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 
 class UnionFind:
-    """Deterministic Union-Find (Disjoint-Set Union) data structure."""
+    """Deterministic Union-Find (Disjoint-Set Union) with path compression and union-by-rank."""
 
-    def __init__(self, elements: Iterable[str] | None = None):
-        self.parent: dict[str, str] = {}
-        self.rank: dict[str, int] = {}
+    def __init__(self, elements: Optional[Iterable[str]] = None):
+        self.parent: Dict[str, str] = {}
+        self.rank: Dict[str, int] = {}
         if elements:
             for el in sorted(set(elements)):
                 self.parent[el] = el
@@ -63,9 +67,9 @@ class UnionFind:
                 self.rank[root_y] += 1
         return True
 
-    def get_components(self) -> dict[str, list[str]]:
+    def get_components(self) -> Dict[str, List[str]]:
         """Return root -> sorted list of member customer IDs."""
-        components: dict[str, list[str]] = {}
+        components: Dict[str, List[str]] = {}
         for x in sorted(self.parent.keys()):
             root = self.find(x)
             components.setdefault(root, []).append(x)
@@ -76,42 +80,37 @@ class UnionFind:
 
 @dataclass
 class RingInfo:
-    """Discovered abuse ring summary and aggregates."""
-
+    """Discovered abuse ring summary and display aggregates."""
     ring_id: str
-    member_customer_ids: list[str]
+    member_customer_ids: List[str]
     ring_size: int
     ring_return_rate: float = 0.0
-    shared_identifiers: dict[str, list[str]] = field(default_factory=dict)
+    shared_identifiers: Dict[str, List[str]] = field(default_factory=dict)
 
 
 @dataclass
 class RingResult:
-    """Container for ring discovery results."""
-
-    rings: dict[str, RingInfo] = field(default_factory=dict)
-    customer_to_ring: dict[str, str] = field(default_factory=dict)
+    """Container for ring discovery outputs."""
+    rings: Dict[str, RingInfo] = field(default_factory=dict)
+    customer_to_ring: Dict[str, str] = field(default_factory=dict)
 
 
 class RingMembershipStore:
-    """Lookup store for precomputed batch ring membership and aggregates.
-
-    Ensures the online scoring path requires only O(1) lookups and never traverses
-    the entity graph dynamically on request paths.
+    """
+    O(1) in-memory lookup store for precomputed batch ring membership.
+    Ensures online scoring never executes dynamic graph walks on the request path.
     """
 
     def __init__(
         self,
-        customer_to_ring: dict[str, str] | None = None,
-        rings: dict[str, RingInfo] | None = None,
+        customer_to_ring: Optional[Dict[str, str]] = None,
+        rings: Optional[Dict[str, RingInfo]] = None,
     ):
-        self.customer_to_ring: dict[str, str] = customer_to_ring or {}
-        self.rings: dict[str, RingInfo] = rings or {}
+        self.customer_to_ring: Dict[str, str] = customer_to_ring or {}
+        self.rings: Dict[str, RingInfo] = rings or {}
 
-    def lookup(
-        self, customer_id: str, default_return_rate: float = 0.0
-    ) -> dict[str, Any]:
-        """Look up ring membership and aggregates for customer_id."""
+    def lookup(self, customer_id: str, default_return_rate: float = 0.0) -> Dict[str, Any]:
+        """O(1) key lookup for customer's ring membership."""
         ring_id = self.customer_to_ring.get(customer_id)
         if ring_id and ring_id in self.rings:
             ring = self.rings[ring_id]
@@ -128,8 +127,8 @@ class RingMembershipStore:
             "in_ring": False,
         }
 
-    def save(self, file_path: str | Path) -> None:
-        """Persist ring membership and aggregates to JSON file."""
+    def save(self, file_path: Union[str, Path]) -> None:
+        """Persist ring membership to JSON."""
         data = {
             "customer_to_ring": self.customer_to_ring,
             "rings": {rid: asdict(rinfo) for rid, rinfo in self.rings.items()},
@@ -140,8 +139,8 @@ class RingMembershipStore:
             json.dump(data, f, indent=2)
 
     @classmethod
-    def load(cls, file_path: str | Path) -> "RingMembershipStore":
-        """Load ring membership and aggregates from JSON file."""
+    def load(cls, file_path: Union[str, Path]) -> "RingMembershipStore":
+        """Load ring membership from JSON file."""
         path = Path(file_path)
         if not path.exists():
             return cls()
@@ -155,20 +154,20 @@ class RingMembershipStore:
 
 
 class RingBuilder:
-    """Discovers abuse rings across shared customer identifiers."""
+    """Discovers abuse rings across shared phone, address, and device links."""
 
     def __init__(self, min_ring_size: int = 3):
         self.min_ring_size = min_ring_size
 
     def extract_edges(
         self,
-        entity_links: list[dict[str, Any]],
-    ) -> tuple[set[str], list[tuple[str, str]], dict[str, dict[str, set[str]]]]:
-        """Extract nodes, deterministic edges, and index shared identifiers."""
-        all_customers: set[str] = set()
-        phone_map: dict[str, set[str]] = {}
-        address_map: dict[str, set[str]] = {}
-        device_map: dict[str, set[str]] = {}
+        entity_links: List[Dict[str, Any]],
+    ) -> Tuple[Set[str], List[Tuple[str, str]], Dict[str, Dict[str, Set[str]]]]:
+        """Extract nodes, canonical pairwise edges (u < v, sorted), and shared maps."""
+        all_customers: Set[str] = set()
+        phone_map: Dict[str, Set[str]] = {}
+        address_map: Dict[str, Set[str]] = {}
+        device_map: Dict[str, Set[str]] = {}
 
         for item in entity_links:
             cid = item.get("customer_id")
@@ -176,36 +175,37 @@ class RingBuilder:
                 continue
             all_customers.add(cid)
 
-            phone = item.get("phone")
-            if phone:
+            phone = item.get("phone") or item.get("phone_number")
+            if phone and str(phone).strip():
                 phone_map.setdefault(str(phone).strip(), set()).add(cid)
 
-            addr = item.get("address_hash")
-            if addr:
+            addr = item.get("address_hash") or item.get("address")
+            if addr and str(addr).strip():
                 address_map.setdefault(str(addr).strip(), set()).add(cid)
 
-            dev = item.get("device_hash")
-            if dev:
+            dev = item.get("device_hash") or item.get("device_id")
+            if dev and str(dev).strip():
                 device_map.setdefault(str(dev).strip(), set()).add(cid)
 
-        # Build pairwise edges deterministically
-        edge_set: set[tuple[str, str]] = set()
+        # Build pairwise edges with canonical ordering (u < v)
+        edge_set: Set[Tuple[str, str]] = set()
 
-        def add_star_edges(cust_set: set[str]) -> None:
+        def add_canonical_edges(cust_set: Set[str]) -> None:
             if len(cust_set) < 2:
                 return
             sorted_custs = sorted(cust_set)
-            canonical = sorted_custs[0]
-            for other in sorted_custs[1:]:
-                edge = (min(canonical, other), max(canonical, other))
-                edge_set.add(edge)
+            for i in range(len(sorted_custs)):
+                for j in range(i + 1, len(sorted_custs)):
+                    u = min(sorted_custs[i], sorted_custs[j])
+                    v = max(sorted_custs[i], sorted_custs[j])
+                    edge_set.add((u, v))
 
         for c_set in phone_map.values():
-            add_star_edges(c_set)
+            add_canonical_edges(c_set)
         for c_set in address_map.values():
-            add_star_edges(c_set)
+            add_canonical_edges(c_set)
         for c_set in device_map.values():
-            add_star_edges(c_set)
+            add_canonical_edges(c_set)
 
         sorted_edges = sorted(edge_set)
         shared_maps = {
@@ -217,73 +217,44 @@ class RingBuilder:
 
     def build(
         self,
-        entity_links: list[dict[str, Any]],
-        historical_orders: list[dict[str, Any]] | None = None,
-        as_of: datetime.datetime | None = None,
+        entity_links: List[Dict[str, Any]],
+        historical_orders: Optional[List[Dict[str, Any]]] = None,
+        as_of: Optional[datetime.datetime] = None,
     ) -> RingResult:
-        """Execute connected components on entity links, filter size >= min_ring_size,
-
-        and calculate historical per-ring aggregates strictly as-of.
+        """
+        Execute deterministic connected components, filter size >= min_ring_size,
+        and assign ring_ids R01, R02, ... sorted by lexicographically smallest member.
         """
         all_customers, sorted_edges, _shared_maps = self.extract_edges(entity_links)
 
-        uf = UnionFind(all_customers)
+        # Nodes inserted in sorted order
+        uf = UnionFind(sorted(all_customers))
         for u, v in sorted_edges:
             uf.union(u, v)
 
         raw_components = uf.get_components()
 
         # Filter components with size >= min_ring_size
-        qualifying_components = [
+        qualifying = [
             members
             for members in raw_components.values()
             if len(members) >= self.min_ring_size
         ]
 
-        # Sort qualifying components deterministically by their minimum member ID
-        qualifying_components.sort(key=lambda m: (m[0], len(m)))
+        # Sort qualifying components deterministically by their smallest member ID
+        qualifying.sort(key=lambda m: (m[0], len(m)))
 
-        rings: dict[str, RingInfo] = {}
-        customer_to_ring: dict[str, str] = {}
+        rings: Dict[str, RingInfo] = {}
+        customer_to_ring: Dict[str, str] = {}
 
-        # Pre-index historical completed orders by customer if provided
-        cust_orders_map: dict[str, list[dict[str, Any]]] = {}
-        if historical_orders:
-            for o in historical_orders:
-                c_id = o.get("customer_id")
-                if not c_id:
-                    continue
-                # As-of filtering on outcome:
-                # only count outcomes that occurred on or before as_of
-                ot = o.get("outcome_time")
-                if as_of and ot:
-                    if isinstance(ot, str):
-                        ot_dt = datetime.datetime.fromisoformat(ot)
-                    else:
-                        ot_dt = ot
-                    if ot_dt > as_of:
-                        continue
-                cust_orders_map.setdefault(c_id, []).append(o)
-
-        for idx, members in enumerate(qualifying_components, start=1):
+        for idx, members in enumerate(qualifying, start=1):
             ring_id = f"R{idx:02d}"
-
-            # Calculate ring_return_rate across all members
-            ring_orders = []
-            for m in members:
-                ring_orders.extend(cust_orders_map.get(m, []))
-
-            if ring_orders:
-                returns_count = sum(1 for o in ring_orders if o.get("y", 0) == 1)
-                ring_return_rate = round(returns_count / len(ring_orders), 4)
-            else:
-                ring_return_rate = 0.0
 
             info = RingInfo(
                 ring_id=ring_id,
                 member_customer_ids=members,
                 ring_size=len(members),
-                ring_return_rate=ring_return_rate,
+                ring_return_rate=0.0,
             )
             rings[ring_id] = info
             for cid in members:
@@ -293,14 +264,12 @@ class RingBuilder:
 
     def create_membership_store(
         self,
-        entity_links: list[dict[str, Any]],
-        historical_orders: list[dict[str, Any]] | None = None,
-        as_of: datetime.datetime | None = None,
+        entity_links: List[Dict[str, Any]],
+        historical_orders: Optional[List[Dict[str, Any]]] = None,
+        as_of: Optional[datetime.datetime] = None,
     ) -> RingMembershipStore:
-        """Build rings and wrap results in RingMembershipStore for fast lookups."""
-        result = self.build(
-            entity_links, historical_orders=historical_orders, as_of=as_of
-        )
+        """Convenience method returning an O(1) lookup store."""
+        result = self.build(entity_links, historical_orders=historical_orders, as_of=as_of)
         return RingMembershipStore(
             customer_to_ring=result.customer_to_ring,
             rings=result.rings,

@@ -56,27 +56,27 @@ Tags: **[REUSE]** verified and frozen, **[EXTEND]** additive change, **[NEW]** b
 
 ### Tasks
 
-- [ ] Leakage test for all 15 features: insert data after t, assert the vector at t is unchanged. **[NEW, verifies verified code]**
+- [x] Leakage test for all 15 features: insert data after t, assert the vector at t is unchanged. **[NEW, verifies verified code]**
 - [ ] Leakage test for the IEEE variant and each IEEE aggregate column used as a feature. **[NEW]**
-- [ ] Velocity test: a burst fixture raises `velocity_5min`, `velocity_30min` and `velocity_60min` above a clean fixture. **[NEW]**
-- [ ] Cold-start test: first transaction for a customer uses sentinels; history-dependent explanations are filtered. **[NEW, verifies verified behaviour]**
-- [ ] `features/builder.py`: `build(order_id, as_of)` returns the 15 vector and writes `feature_snapshot_json`. Same inputs give identical output. **[NEW]**
-- [ ] Adapter test: a PayPal order with missing device and geo fields produces `feature_completeness < 1.0`, lists missing fields, and never fills them with invented values. **[NEW]**
-- [ ] `rules/engine.py` with `spike_velocity` only. Burst fixture hits. Clean fixture does not. The rule never sets the action. **[NEW]**
-- [ ] `rings/builder.py`: deterministic union-find over phone, address and device. Size-3 shared-address fixture is discovered. Size-2 pairs are not. Same input gives the same `ring_id`s. Display-only. **[NEW]**
-- [ ] Read `backend/schemas/transaction.py` and `response.py`. Write `docs/api/ml_contract.md` describing the current request and response. New fields are additive. **[EXTEND]**
-- [ ] Confirm audit rows store no customer ID, device ID or geography. **[REUSE, verify]**
-- [ ] `scripts/explain_sample.py`: prints features, `feature_completeness`, rule hits, ring ID, and policy trace for sample synthetic and IEEE transactions. No training run needed. **[NEW]**
-- [ ] Record in `docs/decisions.md`: rules and rings are evidence only; `spike_cod_heavy`, `spike_micro` and the 18-feature option are dropped. **[NEW]**
+- [x] Velocity test: a burst fixture raises `velocity_5min`, `velocity_30min` and `velocity_60min` above a clean fixture. **[NEW]**
+- [x] Cold-start test: first transaction for a customer uses sentinels; history-dependent explanations are filtered. **[NEW, verifies verified behaviour]**
+- [x] `features/builder.py`: `build(order_id, as_of)` returns the 15 vector and writes `feature_snapshot_json`. Same inputs give identical output. **[NEW]**
+- [x] Adapter test: a PayPal order with missing device and geo fields produces `feature_completeness < 1.0`, lists missing fields, and never fills them with invented values. **[NEW]**
+- [x] `rules/engine.py` with `spike_velocity` only. Burst fixture hits. Clean fixture does not. The rule never sets the action. **[NEW]**
+- [x] `rings/builder.py`: deterministic union-find over phone, address and device. Size-3 shared-address fixture is discovered. Size-2 pairs are not. Same input gives the same `ring_id`s. Display-only. **[NEW]**
+- [x] Read `backend/schemas/transaction.py` and `response.py`. Write `docs/api/ml_contract.md` describing the current request and response. New fields are additive. **[EXTEND]**
+- [x] Confirm audit rows store no customer ID, device ID or geography. **[REUSE, verify]**
+- [x] `scripts/explain_sample.py`: prints features, `feature_completeness`, rule hits, ring ID, and policy trace for sample synthetic and IEEE transactions. No training run needed. **[NEW]**
+- [x] Record in `docs/decisions.md`: rules and rings are evidence only; `spike_cod_heavy`, `spike_micro` and the 18-feature option are dropped. **[NEW]**
 
 ### Exit criteria
 
 - [ ] Leakage tests pass for the 15 features and the IEEE variant
-- [ ] Velocity, cold-start and adapter tests pass
-- [ ] Rule and ring tests pass; neither changes the action
-- [ ] `docs/api/ml_contract.md` matches the schemas
+- [x] Velocity, cold-start and adapter tests pass
+- [x] Rule and ring tests pass; neither changes the action
+- [x] `docs/api/ml_contract.md` matches the schemas
 - [ ] `scripts/explain_sample.py` runs on both datasets
-- [ ] Full ML test suite still passes
+- [x] Full ML test suite still passes
 
 **Next:** Phase C
 
