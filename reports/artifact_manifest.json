@@ -50,6 +50,13 @@
       "sha256": "c508648d4ec6b4863cafff377f50e8e6328ff11d303ed9188ed4f28eef05838a",
       "source_path": "merchantshield-ai/ml/models/threshold_sweep_validation.csv",
       "frozen": true
+    },
+    "ml/external/ieee/results/phase17_lgbm.pkl": {
+      "file_path": "ml/external/ieee/results/phase17_lgbm.pkl",
+      "size_bytes": 806484,
+      "sha256": "75aeb85de8ddcc09f74a064cedd8d48ca56e52d7f8aba33d7f0176fab48f7c97",
+      "source_path": "reproduced Phase 17 IEEE model",
+      "frozen": true
     }
   }
 }
