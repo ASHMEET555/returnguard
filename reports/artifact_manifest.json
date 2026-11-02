@@ -57,6 +57,13 @@
       "sha256": "75aeb85de8ddcc09f74a064cedd8d48ca56e52d7f8aba33d7f0176fab48f7c97",
       "source_path": "reproduced Phase 17 IEEE model",
       "frozen": true
+    },
+    "ml/models/lgbm_ieee_v2.pkl": {
+      "file_path": "ml/models/lgbm_ieee_v2.pkl",
+      "size_bytes": 817092,
+      "sha256": "1cec043607b48a85fbf11f693fcaa45e420bdb8e194cdf8a2f07120a8cf19a91",
+      "source_path": "Phase C3 improved candidate cand_spw_low20 (review file)",
+      "frozen": false
     }
   }
 }
