@@ -56,3 +56,37 @@ This document formally records architectural, evaluation, and policy decisions e
 - **Decision**: Adopt the verified financial cost model:
   $$\text{Cost} = (\text{FP} \times ₹50) + \sum_{i \in \text{FN}} (0.50 \times \text{Amount}_i)$$
 - **Retirement**: Legacy COD/RTO Net ₹ profit formulas are fully retired.
+
+---
+
+### D-B1: `spike_velocity` Rule Threshold Derivation
+- **Decision**: Calibrate rule thresholds for `spike_velocity` strictly on the validation split (Days 40–49, 34,735 legitimate transactions) at the 99th percentile of legitimate traffic:
+  - `velocity_5min`: 99th percentile = 0.0 (firing condition: $> 0$)
+  - `velocity_30min`: 99th percentile = 1.0 (firing condition: $> 1$)
+  - `velocity_60min`: 99th percentile = 1.0 (firing condition: $> 1$)
+- **Action**: When any condition is met, policy action escalates to `REVIEW` with reason `HIGH_VELOCITY_BURST`.
+- **Rationale**: Never calibrate rule thresholds on test splits; 99th percentile of legitimate behavior ensures the false-positive review rate introduced by the velocity rule remains $\le 1\%$.
+
+---
+
+### D-B2: Feature Leakage Verification Methodology
+- **Decision**: Verify point-in-time (PIT) leakage using perturbation-based testing on 500 stratified customer-time pairs (150 cold-start, 150 mid-history, 200 uniform random).
+- **Invariants**:
+  1. *Future Injection Invariance*: Injecting synthetic transactions into customer history at $t + 1\text{ min}$ and $t + 10\text{ min}$ must yield exactly 0 difference ($\text{atol}=0, \text{rtol}=0$) across all 15 feature dimensions computed at evaluation time $t$.
+  2. *Truncation Equivalence*: Truncating raw transaction history to $t$ before computing features must equal features computed against the full database at $t$ with exact 0 tolerance.
+- **Rationale**: Confirms that sliding window queries strictly use `timestamp < t` and temporal boundaries are leak-free.
+
+---
+
+### D-B3: Fraud Ring Graph Builder Architecture
+- **Decision**: Ring detection is display-only and operates via disjoint-set (union-find) clustering with path compression:
+  - Canonical edge ordering ensures deterministic component discovery regardless of row input order.
+  - Threshold: Components with fewer than 3 connected entities are discarded (`min_size = 3`).
+  - Strict Non-Interference: Phone numbers and address entities are external to the model. Ring attributes (`ring_size`, `ring_return_rate`) are display-only UI metadata; they must never enter the model feature vector, LightGBM probability scoring, or policy decision engine.
+
+---
+
+### D-B4: Deferral of IEEE Leakage Check to Phase C
+- **Decision**: External IEEE-CIS dataset evaluation and its dedicated point-in-time leakage audit are explicitly moved to Phase C.
+- **Rationale**: Phase B focuses entirely on feature builder determinism, sliding window verification, rules calibration, and ring graph generation on synthetic transaction data without model retraining or test split contamination.
+
