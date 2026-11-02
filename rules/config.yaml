@@ -1,4 +1,16 @@
-# Spike rule thresholds
+# Spike Velocity Rule Configuration
+# Derived on synthetic validation split (Days 40-49, is_fraud == 0)
+# Validation legitimate sample size: 34,735 transactions
+# Date range: 2026-05-11 00:00:35 to 2026-05-20 23:59:39
+# Calibrated at the 99th percentile of legitimate traffic:
+#   - velocity_5min 99th percentile = 0.0  (firing threshold: > 0)
+#   - velocity_30min 99th percentile = 1.0 (firing threshold: > 1)
+#   - velocity_60min 99th percentile = 1.0 (firing threshold: > 1)
+# Note: Test split (Days 50-59) was NOT used.
+
 spike_velocity:
+  max_velocity_5min: 0
+  max_velocity_30min: 1
+  max_velocity_60min: 1
   max_orders_24h: 5
   max_orders_7d: 15
