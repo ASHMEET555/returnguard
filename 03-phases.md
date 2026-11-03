@@ -82,14 +82,14 @@ Exit: 373 passing tests; multi-tenant isolation, relay ingestion, per-key rate l
 
 ## Phase F — @returnguard/sdk [DONE]
 
-- [x] Typed client: `scoreTransaction`, decisions list and detail, explanation, reviews (list and submit), analytics, model performance
-- [x] `tokenProvider` callback; no token storage in the SDK
-- [x] Cursor pagination; typed errors (401, 403, 404, 429, network)
-- [x] Retry for reads only, one attempt
-- [x] ES2017 build; no React import; no secrets in bundle (CI grep)
-- [x] Contract tests against the running API; token-expiry renewal test
+- [x] Typed client: `scoreTransaction`, decisions list and detail, explanation, reviews (list and submit), analytics, model performance (`packages/sdk/test/resources.test.ts`, `packages/sdk/test/contract.test.ts`)
+- [x] `tokenProvider` callback; no token storage in the SDK (`packages/sdk/test/token_provider.test.ts`)
+- [x] Cursor pagination; typed errors (401, 403, 404, 429, network) (`packages/sdk/test/transport.test.ts`, `packages/sdk/test/contract_tenant_ratelimit.test.ts`)
+- [x] Retry for reads only, one attempt (`packages/sdk/test/resources.test.ts`)
+- [x] ES2017 build; no React import; no secrets in bundle (CI grep) (`scripts/check-bundle.mjs`, verified by `npm run check:bundle`)
+- [x] Contract tests against the running API; token-expiry renewal test (`packages/sdk/test/contract.test.ts`, `packages/sdk/test/contract_tenant_ratelimit.test.ts`)
 
-Exit: contract tests pass against the running API; bundle grep clean.
+Exit: contract tests pass against the running API; bundle grep clean. All items verified with named tests.
 
 ## Phase G — `@returnguard/react` and AG Grid [TODO]
 
