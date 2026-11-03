@@ -55,7 +55,7 @@ def get_model_performance(
             recall=0.8818,
             f1_score=0.8304,
             threshold=0.40,
-            sample_count=10000,
+            sample_count=35949,
             reproduction_status="REPRODUCED",
         ),
         ieee_cis=ModelDatasetMetrics(
@@ -66,7 +66,7 @@ def get_model_performance(
             recall=0.7980,
             f1_score=0.1171,
             threshold=0.35,
-            sample_count=590540,
+            sample_count=118108,
             reproduction_status="REPORTED_UNVERIFIED",
         ),
         honest_limits_note=(
