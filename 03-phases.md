@@ -165,22 +165,22 @@ Goal: raise IEEE precision above 6.3%, without giving up the recall agreed in M2
 
 ### Build checklist
 
-- [ ] `payments/paypal_client.py`: OAuth token from sandbox credentials (env vars only)
-- [ ] `POST /v1/payments/create`: sandbox order with `intent` per `SHADOW_MODE`
-- [ ] Buyer approval in sandbox checkout (Next.js page with PayPal SDK button)
-- [ ] Score on approval, write `audit_score_event`
-- [ ] Policy gate: `allow` and `info` capture; `warning` waits for merchant; `critical` holds
-- [ ] `POST /v1/payments/{id}/authorize` and `POST /v1/payments/{id}/capture`
-- [ ] Authorization review deadline stored; expiry notifies merchant
-- [ ] `POST /v1/paypal/webhooks`: signature verify, `payment_event` by `event_id`, duplicate replay is a no-op
-- [ ] Seed script creates sandbox orders from the adapter output in Phase A (seed adapter)
+- [x] `payments/paypal_client.py`: OAuth token from sandbox credentials (env vars only)
+- [x] `POST /v1/payments/create`: sandbox order with `intent` per `SHADOW_MODE`
+- [x] Buyer approval in sandbox checkout (Next.js page with PayPal SDK button)
+- [x] Score on approval, write `audit_score_event`
+- [x] Policy gate: `allow` and `info` capture; `warning` waits for merchant; `critical` holds
+- [x] `POST /v1/payments/{id}/authorize` and `POST /v1/payments/{id}/capture`
+- [x] Authorization review deadline stored; expiry notifies merchant
+- [x] `POST /v1/paypal/webhooks`: signature verify, `payment_event` by `event_id`, duplicate replay is a no-op
+- [x] Seed script creates sandbox orders from the adapter output in Phase A (seed adapter)
 
 ### Exit criteria
 
-- [ ] Sandbox payment captured after ReturnGuard policy allows it
-- [ ] A held (`critical`) order is not captured until merchant action
-- [ ] Replayed webhook event does not change state
-- [ ] No PayPal secret appears in git history
+- [x] Sandbox payment captured after ReturnGuard policy allows it
+- [x] A held (`critical`) order is not captured until merchant action
+- [x] Replayed webhook event does not change state
+- [x] No PayPal secret appears in git history
 
 **Next:** Phase E
 
