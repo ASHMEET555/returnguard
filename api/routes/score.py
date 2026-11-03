@@ -1,19 +1,12 @@
 """
-Risk scoring endpoint (Phase C7 / Stage 2 Authenticated).
+Risk scoring endpoint (Phase C7 / Phase E-2 Multi-Tenant Authenticated).
 
-Implements POST /v1/score returning:
-- risk_score (0-1 float) and risk_score_100 (0-100 int)
-- tier, policy_rule, policy_action
-- severity, suggested_action (from services/policy_mapping.py)
-- reason_codes (from ShapExplanationService)
-- rule_hits (from SpikeRuleEngine)
-- ring_id (display only)
-- model_version, dataset, threshold
-- model_status, feature_completeness, explanation_status
-- shadow (defaults to True)
+Implements:
+- POST /v1/score: Online risk scoring and policy evaluation (tenant-scoped)
+- GET /v1/decisions/{decision_id}: Retrieve stored risk decision scoped to authenticated merchant
 
 Includes fallback to amount-only decision when model is unavailable (never blocks).
-Protected by Bearer API Key authentication (Phase E / Stage 2).
+Protected by Bearer API Key authentication and strict merchant tenancy boundaries.
 """
 
 import json
@@ -25,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from auth.api_keys import get_api_key_merchant
 from db.models import AuditScoreEvent
+from db.repositories.tenant_scoped import TenantScopedRepository
 from db.session import get_db
 from services.score import ScoringService, get_scoring_service
 
@@ -83,6 +77,7 @@ class ScoreResponse(BaseModel):
     feature_completeness: float
     explanation_status: str
     shadow: bool
+    decision_id: Optional[str] = None
 
 
 @router.post(
@@ -90,12 +85,6 @@ class ScoreResponse(BaseModel):
     response_model=ScoreResponse,
     status_code=status.HTTP_200_OK,
     summary="Online risk scoring and policy evaluation",
-)
-@router.post(
-    "/score",
-    response_model=ScoreResponse,
-    status_code=status.HTTP_200_OK,
-    include_in_schema=False,
 )
 def score_transaction(
     payload: ScoreRequest,
@@ -106,18 +95,32 @@ def score_transaction(
     """
     Evaluates fraud risk for an order or transaction.
 
-    Protected by Bearer API Key authentication.
+    Protected by Bearer API Key authentication and tenant boundary:
     - Requires valid Authorization: Bearer <key> header.
     - If payload.merchant_id is provided, must match auth_merchant_id (or 400 Bad Request).
-    - Writes immutable audit record to audit_score_events with auth_merchant_id.
+    - If any entry in prior_transactions carries a foreign merchant_id, rejects with 400 Bad Request.
+    - Writes immutable audit record to audit_score_events stamped with auth_merchant_id.
     - Returns the complete scoring contract defined in 02-architecture.md Section G.
     """
-    # Conflicting body merchant_id check
+    # 1. Conflicting body merchant_id check
     if payload.merchant_id is not None and payload.merchant_id != auth_merchant_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"merchant_id in body ('{payload.merchant_id}') does not match authenticated merchant ('{auth_merchant_id}')",
         )
+
+    # 2. Prior transactions cross-tenant validation (Phase E-2 Design: Reject with 400)
+    if payload.prior_transactions:
+        for idx, p in enumerate(payload.prior_transactions):
+            p_mid = p.get("merchant_id")
+            if p_mid is not None and str(p_mid).strip() != "" and str(p_mid).strip() != auth_merchant_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        f"prior_transactions[{idx}].merchant_id ('{p_mid}') "
+                        f"does not match authenticated merchant ('{auth_merchant_id}')"
+                    ),
+                )
 
     service = get_scoring_service()
     force_unavail = (
@@ -128,13 +131,22 @@ def score_transaction(
     req_dict = payload.model_dump()
     req_dict["merchant_id"] = auth_merchant_id
 
+    # Stamp all prior records with authenticated merchant_id
+    if req_dict.get("prior_transactions"):
+        for p in req_dict["prior_transactions"]:
+            p["merchant_id"] = auth_merchant_id
+
     result = service.score(req_dict, force_unavailable=force_unavail)
 
-    # Persist audit record carrying authenticated merchant_id
+    decision_id = str(uuid.uuid4())
+    result["decision_id"] = decision_id
+
+    # Persist audit record carrying authenticated merchant_id via tenant-scoped repository
     try:
+        repo = TenantScopedRepository(db, auth_merchant_id)
         audit_event = AuditScoreEvent(
             id=str(uuid.uuid4()),
-            decision_id=str(uuid.uuid4()),
+            decision_id=decision_id,
             order_id=result["order_id"],
             merchant_id=auth_merchant_id,
             channel=result["channel"],
@@ -154,9 +166,169 @@ def score_transaction(
             ring_id=result.get("ring_id"),
             shadow=1 if result.get("shadow", True) else 0,
         )
-        db.add(audit_event)
-        db.commit()
+        repo.save_audit_score_event(audit_event)
     except Exception:
         db.rollback()
 
     return ScoreResponse(**result)
+
+
+@router.get(
+    "/v1/decisions/{decision_id}",
+    response_model=ScoreResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Retrieve a stored risk scoring decision by ID under tenant isolation",
+)
+def get_decision_by_id(
+    decision_id: str,
+    auth_merchant_id: str = Depends(get_api_key_merchant),
+    db: Session = Depends(get_db),
+) -> ScoreResponse:
+    """
+    Retrieves a stored risk scoring decision by its decision_id.
+
+    Tenant Isolation Invariant:
+    - Scoped strictly to the authenticated merchant.
+    - If the decision belongs to another merchant or does not exist, returns HTTP 404 (NEVER HTTP 403).
+    """
+    repo = TenantScopedRepository(db, auth_merchant_id)
+    audit_row = repo.get_decision(decision_id)
+
+    if not audit_row:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Decision not found",
+        )
+
+    reason_codes = []
+    if audit_row.reason_codes_json:
+        try:
+            raw_reasons = json.loads(audit_row.reason_codes_json)
+            reason_codes = [ReasonCode(**r) for r in raw_reasons]
+        except Exception:
+            reason_codes = []
+
+    rule_hits = []
+    if audit_row.rule_hits_json:
+        try:
+            rule_hits = json.loads(audit_row.rule_hits_json)
+        except Exception:
+            rule_hits = []
+
+    return ScoreResponse(
+        order_id=audit_row.order_id,
+        channel=audit_row.channel,
+        risk_score=float(audit_row.risk_score),
+        risk_score_100=int(round(float(audit_row.risk_score) * 100)),
+        tier=audit_row.tier,
+        policy_rule=audit_row.policy_rule,
+        policy_action=audit_row.policy_action,
+        severity=audit_row.severity,
+        suggested_action=audit_row.suggested_action,
+        reason_codes=reason_codes,
+        rule_hits=rule_hits,
+        ring_id=audit_row.ring_id,
+        model_version=audit_row.model_version,
+        dataset="synthetic",
+        threshold=float(audit_row.threshold),
+        model_status=audit_row.model_status,
+        feature_completeness=float(audit_row.feature_completeness),
+        explanation_status=audit_row.explanation_status,
+        shadow=bool(audit_row.shadow),
+        decision_id=audit_row.decision_id,
+    )
+
+
+
+@router.get(
+    "/v1/decisions/{decision_id}/audit",
+    status_code=status.HTTP_200_OK,
+    summary="Reconstruct full audit trail and evidence for a risk decision",
+)
+def get_decision_audit_reconstruction(
+    decision_id: str,
+    auth_merchant_id: str = Depends(get_api_key_merchant),
+    db: Session = Depends(get_db),
+):
+    """
+    Reconstructs the full audit record, policy trace, SHAP top-K, rule hits,
+    feature snapshot, and linked relay events for the authenticated merchant.
+
+    Strictly read-only; writes zero database rows.
+    Returns HTTP 404 if the decision is not found or belongs to another merchant.
+    """
+    repo = TenantScopedRepository(db, auth_merchant_id)
+    audit_row = repo.get_decision(decision_id)
+
+    if not audit_row:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Decision not found for authenticated merchant",
+        )
+
+    raw_reasons = []
+    if audit_row.reason_codes_json:
+        try:
+            raw_reasons = json.loads(audit_row.reason_codes_json)
+        except Exception:
+            raw_reasons = []
+
+    rule_hits = []
+    if audit_row.rule_hits_json:
+        try:
+            rule_hits = json.loads(audit_row.rule_hits_json)
+        except Exception:
+            rule_hits = []
+
+    feature_snapshot = {}
+    if audit_row.feature_snapshot_json:
+        try:
+            feature_snapshot = json.loads(audit_row.feature_snapshot_json)
+        except Exception:
+            feature_snapshot = {}
+
+    relay_events_rows = repo.get_payment_events_for_order(audit_row.order_id)
+    relay_events = [
+        {
+            "event_id": e.event_id,
+            "event_type": e.event_type,
+            "status": e.status,
+            "summary": e.summary,
+            "received_at": e.received_at.isoformat() if e.received_at else None,
+        }
+        for e in relay_events_rows
+    ]
+
+    return {
+        "status": "success",
+        "data": {
+            "decision": {
+                "decision_id": audit_row.decision_id,
+                "order_id": audit_row.order_id,
+                "merchant_id": audit_row.merchant_id,
+                "channel": audit_row.channel,
+                "risk_score": float(audit_row.risk_score),
+                "tier": audit_row.tier,
+                "model_version": audit_row.model_version,
+                "model_status": audit_row.model_status,
+                "threshold": float(audit_row.threshold) if audit_row.threshold is not None else 0.40,
+                "feature_completeness": float(audit_row.feature_completeness) if audit_row.feature_completeness is not None else 1.0,
+                "explanation_status": audit_row.explanation_status,
+                "shadow": bool(audit_row.shadow),
+                "created_at": audit_row.created_at.isoformat() if audit_row.created_at else None,
+            },
+            "policy_trace": {
+                "policy_rule": audit_row.policy_rule,
+                "policy_action": audit_row.policy_action,
+                "suggested_action": audit_row.suggested_action,
+                "severity": audit_row.severity,
+                "tier": audit_row.tier,
+                "threshold": float(audit_row.threshold) if audit_row.threshold is not None else 0.40,
+                "rule_hits": rule_hits,
+            },
+            "shap_top_k": raw_reasons,
+            "rule_hits": rule_hits,
+            "feature_snapshot": feature_snapshot,
+            "relay_events": relay_events,
+        },
+    }

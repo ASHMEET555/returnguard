@@ -1,137 +1,117 @@
-# 01 — Brief, locks, decisions, Definition of Done (ML-layer update)
+# 01 — Brief
 
-Read once before Phase A. Re-check before submission.
+## 1. What ReturnGuard is
 
----
+ReturnGuard is a B2B payment-risk platform. Merchants send payment transactions to it from their servers. It returns a fraud probability, a policy recommendation, and SHAP-based reasons for that recommendation. Merchants may also embed its risk components in their own admin applications through a JavaScript SDK and React components.
 
-## 1. What we are building
+ReturnGuard recommends. The merchant executes. ReturnGuard never moves money, cancels orders, voids authorizations, refunds payments, or files disputes on its own.
 
-**ReturnGuard / MerchantShield ML layer on the PayPal + AI hackathon plan.** The product is a payment fraud risk layer for a merchant using PayPal sandbox orders. It estimates fraud probability for each order, explains the estimate with SHAP, and recommends an action. The merchant executes the action. The system does not move money, cancel orders, or file disputes on its own.
+**ShopPoint** is the reference merchant integration and demo application. It is not the ReturnGuard product. ShopPoint owns checkout, PayPal credentials, PayPal order creation, authorization, capture, and PayPal webhooks.
 
-Hackathon: **Build What's Next with PayPal and AI.** The project must meaningfully use PayPal and AI. PayPal and AG Grid are compulsory and stay in the plan as written.
+**Loss class:** card-not-present payment fraud, including chargebacks.
 
-**Loss class (ML target):** card-not-present payment fraud, including chargebacks. This replaces the original return-abuse target (decision M1).
+**Hackathon:** Build What's Next with PayPal and AI. PayPal and AI must be used meaningfully. AG Grid Community is a required component of the merchant risk-management dashboard.
 
----
+## 2. Product principles
 
-## 2. Track bar (must ship)
+1. Decisions are made by ReturnGuard's risk engine and policy, not by the LLM, the SDK, or the merchant UI.
+2. Shadow mode is the default. Enforcement is an explicit merchant configuration.
+3. Every merchant's data is isolated. A merchant can never read another merchant's transactions, decisions, reviews, audit rows or evidence.
+4. Payment execution belongs to the merchant's payment integration. ReturnGuard never holds PayPal credentials and never calls PayPal.
+5. Every recommendation is explainable through stored records and SHAP output, and every action leaves an audit row.
 
-| Requirement | Proof |
-|-------------|-------|
-| One loss class stated clearly | README and demo open with it |
-| Working detector with explainable output | `POST /v1/score` returns probability, severity, suggested action, SHAP reasons |
-| Precision and recall on a held-out set | `reports/holdout_metrics.md` and `.json`, synthetic and IEEE in separate sections, with split method |
-| Honest false-positive cost | ₹ cost at the operating threshold, from the verified cost model |
-| Defense-only | Recommendation actions, shadow default, human approval for external action |
+## 3. Product scope
 
----
+| Area | Status | Notes |
+|---|---|---|
+| Risk scoring API (`POST /v1/score`) | Built | Unauthenticated today. Authentication is Phase E |
+| ML model (LightGBM, frozen) | Built | Synthetic and IEEE-CIS artifacts; see section 6 |
+| Policy engine (five rules) | Built | Verified; unchanged |
+| SHAP explanations | Built | Additivity check in place |
+| Shadow mode | Built | Default on |
+| Audit records (`audit_score_events`) | Built | No customer, device or geography stored |
+| Merchant tenancy and API keys | Not built | Phase E |
+| Embed tokens for browser SDK | Not built | Phase E/F |
+| `@returnguard/sdk` | Not built | Phase F |
+| `@returnguard/react` with AG Grid | Not built | Phase G |
+| ShopPoint PayPal authorize / capture gate | Built, partly verified | Mocked tests pass; live sandbox evidence pending |
+| ShopPoint PayPal webhooks | Built, **signature verification missing** | Phase D3 reopened |
+| Evidence Engine (dispute packs, LLM drafts) | Not built; tables and stubs exist | Phase I |
+| Vector retrieval | Deferred | Not required for MVP |
 
-## 3. Product locks (ML rows changed)
+## 4. Integration boundary
 
-| Decision | Choice |
-|----------|--------|
-| Primary model | LightGBM (verified). Random Forest and logistic regression are baselines in the same lift table |
-| Feature set | Verified 15 causal features. IEEE variant adds `card_product_share` and is versioned separately |
-| Datasets | Synthetic (verified generator, seed 42) and IEEE-CIS (`IEEE_DATA_DIR`) |
-| Cost model | FP = ₹50, FN = 50% of amount (verified). Threshold chosen on validation to minimise cost, subject to a recall constraint |
-| Policy | Verified five-rule policy: `BLOCK`, `STEP_UP_VERIFICATION`, `ALLOW_WITH_MONITORING`, `ALLOW` |
-| Severity and suggested action | Derived from the policy action (table in section 4) |
-| Explainability | TreeSHAP for the shipping LightGBM artifact, plus verified additivity check. Deterministic templates, not an LLM |
-| Stance | Shadow default on. Recommendations only |
-| Frontend | AG Grid Community console (original plan, Phase F). Verified React dashboard is not adopted |
-| LLM | Gemini or OpenAI. Explains and drafts. Never decides risk, severity or action |
+| Concern | Owner |
+|---|---|
+| Merchant login and admin roles | Merchant (ShopPoint) |
+| Checkout and order records | Merchant |
+| PayPal credentials, orders, authorization, capture, void | Merchant (ShopPoint) |
+| PayPal webhook receipt and signature verification | Merchant (ShopPoint) |
+| Risk score, policy action, SHAP reasons, rule hits | ReturnGuard |
+| Risk decision history and audit | ReturnGuard |
+| Merchant review decisions (recorded) | ReturnGuard records; merchant executes |
+| Evidence packs and dispute drafts | ReturnGuard prepares; merchant approves and submits |
 
-### 3.1 Policy rules (verified, unchanged)
+## 5. Policy and action semantics
 
-| Order | Condition | Action |
-|-------|-----------|--------|
-| 1 | probability ≥ 0.80 | `BLOCK` |
-| 2 | probability ≥ 0.40 | `STEP_UP_VERIFICATION` |
-| 3 | probability ≥ 0.15 and amount ≥ amount threshold | `STEP_UP_VERIFICATION` |
-| 4 | probability ≥ 0.15 | `ALLOW_WITH_MONITORING` |
-| 5 | otherwise | `ALLOW` |
+| Policy action | Recommended merchant behaviour | Enforced only when |
+|---|---|---|
+| `ALLOW` | Capture | Always |
+| `ALLOW_WITH_MONITORING` | Capture and monitor | Always |
+| `STEP_UP_VERIFICATION` | Hold capture until customer verification | `SHADOW_MODE=false` |
+| `BLOCK` | Hold capture for merchant review. Never auto-decline | `SHADOW_MODE=false` |
 
-Operating threshold for the policy decision point: τ = 0.40 on synthetic validation (recall constraint). IEEE artifact τ = 0.35 (Phase 17). Each artifact keeps its own threshold. Thresholds are never shared silently.
+In shadow mode the merchant captures every payment and ReturnGuard records what it would have done.
 
-Amount threshold: ₹25,000 for synthetic. For IEEE, the amount threshold is chosen on validation and documented, because the IEEE currency is not stated (decision M4).
+A merchant-initiated void (on review rejection) is a separate action in the merchant's own payment workflow. Whether this exists is an open decision (D-SDK-8).
 
-`BLOCK` means "recommend decline to the merchant." It holds a PayPal capture for merchant review. It does not reject the buyer or move money.
+## 6. Model and metrics
 
----
+**Primary (synthetic):** LightGBM, frozen artifact `candidate_lgbm_v1.pkl`. Test split days 50–59. Reproduced on this machine: ROC-AUC 0.9684, PR-AUC 0.9009, precision 0.7847, recall 0.8818, F1 0.8304, expected cost ₹41,376.78.
 
-## 4. Severity and suggested action (replaces the old score bands)
+**External validation (IEEE-CIS):** Phase 17 artifact at τ = 0.35. Reported: precision 6.31%, recall 79.80%, ROC-AUC 0.7712. The artifact file and its stored predictions are not present in the repository, so these figures are reported, not reproduced. They are **UNVERIFIED** until predictions are regenerated.
 
-| Policy action | Severity | Suggested action | Money-path effect (Phase D) |
-|---------------|----------|------------------|-----------------------------|
-| `BLOCK` | `critical` | `manual_review` | Capture held until merchant decides |
-| `STEP_UP_VERIFICATION` | `warning` | `step_up_verify` | Merchant prompt shown; capture waits |
-| `ALLOW_WITH_MONITORING` | `info` | `allow` (+ log) | Capture proceeds |
-| `ALLOW` | `none` | `allow` | Capture proceeds |
+**Unreconciled:** an earlier table lists synthetic ROC-AUC 0.984. Neither the 0.984 figure nor its script has been found. Publish 0.9684 with the split stated, and mark 0.984 as unreconciled until it is traced.
 
-Severity is derived from the policy action in code. It can never disagree with the action.
+**Candidate v2 (IEEE):** `lgbm_ieee_v2.pkl` exists on disk and reports precision 6.70%. It is **not approved for serving** under Hard Rule 2. Serving remains on the frozen artifacts.
 
----
+**Honest reading:** the IEEE-CIS model is a high-recall filter for step-up review. Its precision is low, about one true fraud per 15 flags. It must not be presented as a precise blocker.
 
-## 5. Changes from the original plan (ML layer only)
+## 7. Money-path invariants
 
-| Original | Now | Reason |
-|----------|-----|--------|
-| XGBoost primary | LightGBM (verified) | Verified accuracy and tests |
-| Return-abuse target | Payment fraud / chargebacks | Matches the verified datasets |
-| COD/PayPal feature set (25) | Verified 15 + IEEE variant | Frozen, reproducible |
-| Score bands 0.30 / 0.50 / 0.67 | Policy-derived severity | One source of truth for actions |
-| RTO Net ₹ formula | Verified cost model | Card-fraud relevant |
-| Spike and cod-heavy rules as model inputs | Rules are evidence only; velocity is also a model feature | Keeps the model frozen and the rules auditable |
-| Abuse-ring as model input | Display-only ring module | Used by the demo; not a model input |
-| Rules-only fallback | Amount-only fallback, never `BLOCK` | Safe fallback |
+1. Risk is evaluated after authorization and before any capture.
+2. No capture path bypasses the decision check.
+3. A `BLOCK` holds capture; it never voids or declines automatically.
+4. A rejection by the merchant is recorded in an audit row before any PayPal void is attempted.
+5. Replayed PayPal webhooks change nothing.
+6. ReturnGuard never receives or stores PayPal secrets.
 
----
+## 8. Definition of Done (current)
 
-## 6. Open decisions (ML layer)
+- [ ] Every ReturnGuard route except health requires authentication
+- [ ] Two-tenant isolation tests pass for decisions, audit, reviews, analytics and evidence
+- [ ] Cross-tenant identifiers return 404
+- [ ] ShopPoint webhook verifies PayPal signatures; invalid and missing signatures are rejected, with tests
+- [ ] D1 sandbox end-to-end run with saved logs
+- [ ] Artifact manifest matches disk, or the external-artifact decision is recorded
+- [ ] ROC-AUC 0.984 reconciled or removed from all documents
+- [ ] `@returnguard/sdk` contract tests pass against the running API
+- [ ] `@returnguard/react` renders in ShopPoint on React 16.13
+- [ ] ShopPoint admin page shows live decisions through the SDK
+- [ ] Evidence Engine: evidence packs generated from stored rows; guardrail test rejects injected IDs
+- [ ] Demo video under 3 minutes; public repo; LICENSE in About
 
-| # | Decision | Recommendation | Blocks |
-|---|----------|----------------|--------|
-| M1 | Loss class: payment fraud (recommended) vs return abuse | Payment fraud. Confirm PayPal dispute reason names in sandbox | Phase A |
-| M2 | IEEE recall 79.8% vs the 80% constraint | Relax to 0.78 for IEEE with user approval, or select a model that meets 0.80 | Phase C |
-| M3 | IEEE precision target | Set a number, or "beat 6.3% on validation; report test honestly" | Phase C |
-| M4 | IEEE amount currency and amount threshold | Validation-chosen threshold, currency marked UNVERIFIED | Phase C |
-| M5 | Database | PostgreSQL per original stack. Verified audit tested on both SQLite and PostgreSQL | Phase A |
-| M6 | Vector DB and SaaS tenancy | Not added (Phase E and G locked). Revisit only if those phases may change | Not in scope |
-| M7 | Hackathon and sponsor rules | PayPal + AI, as in the original plan | Closed |
+## 9. Out of scope
 
-Agents stop and ask before resolving any of M1–M6.
+Hosted or iframe dashboard, billing, self-serve onboarding, multi-region deployment, Kafka, ClickHouse, vector database (until Phase I justifies it), return-abuse module, abuse-ring as a model feature, live card-network submission, any code path where ReturnGuard calls PayPal.
 
----
+## 10. Open decisions
 
-## 7. Verification items (Phase A records results)
-
-1. `scale_pos_weight = 73.12` against the training-split prevalence.
-2. IEEE boundary at day 110: inclusive or exclusive, and non-overlapping intervals.
-3. Pytest baseline: 269 passing across 8 files.
-4. Phase 17 cost: 2,469,531 cost units. With FP = ₹50 and 48,139 FP, FP cost is 2,406,950. The remainder (62,581 units) implies FN amounts of about 125,162 total across 821 FN. Verify this decomposition against the stored predictions before reporting it.
-5. PayPal 3-day honor period on the current PayPal page. Mark `UNVERIFIED` until confirmed.
-6. Dispute reason and evidence type names in the PayPal sandbox (needed by Phase G).
-
----
-
-## 8. Definition of Done (ML layer)
-
-- [ ] One loss class stated (payment fraud)
-- [ ] Verified ML tests pass (269 across 8 files)
-- [ ] Synthetic and IEEE metrics reproduce within tolerance
-- [ ] LightGBM, Random Forest, logistic regression and amount-only baseline in the lift table
-- [ ] IEEE precision improvement program run on validation only, all candidates logged, including failures
-- [ ] Holdout precision and recall published, synthetic and IEEE separately, with split method
-- [ ] ₹ cost table at operating thresholds, with currency note for IEEE
-- [ ] SHAP top-K and additivity check pass on the shipping artifact
-- [ ] Score API returns probability, `risk_score_100`, tier, policy rule, severity, suggested action, SHAP reasons, `model_status`, `feature_completeness`, `explanation_status`, `shadow`
-- [ ] Fallback returns amount-only result and never `BLOCK`
-- [ ] Shadow mode on by default
-- [ ] Leakage test passes for the 15 features and the IEEE variant
-- [ ] Original plan's DoD items for Phases D–H still checked as written
-
----
-
-## 9. Out of scope (unchanged from original, plus ML)
-
-Redis or Feast online features, Kafka, ClickHouse, full RBAC, live card-network submission, automated dispute filing, offense tooling, abuse-ring as a model feature, return-abuse module, multi-currency settlement, vector DB and SaaS tenancy (M6).
+| # | Decision | Status |
+|---|---|---|
+| D-SDK-8 | Merchant-initiated PayPal void on review rejection | Open. Needs sign-off |
+| D-MAN | `phase17_lgbm.pkl` missing from disk while listed as frozen | Open. Recommended: move to an external section with a stated reason |
+| D-ROC | Synthetic ROC-AUC 0.984 vs 0.9684 | Open. Publish 0.9684 with split stated |
+| D-PP | Remove PayPal credentials from ReturnGuard `.env.example` and `payments/webhooks.py` | Recommended yes; execute in Phase E |
+| D-RAW | Raw PayPal webhook route in ReturnGuard (`/v1/paypal/webhooks`) | Tested; disable only after tests are migrated |
+| D-UI | Existing Next.js `web/` app | Keep as dev harness consuming `packages/react`; add no new pages |

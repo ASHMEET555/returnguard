@@ -1,0 +1,16 @@
+=== ReturnGuard PayPal Grep Audit (Phase E-4) ===
+Audit Scope: ['api', 'auth', 'backend', 'db', 'features', 'ml', 'payments', 'services', 'scripts']
+Exclusions: tests/, docs/, reports/, legacy/, .venv/, node_modules/
+
+[/v1/paypal/webhooks] api/routes/webhooks.py:3: POST /v1/paypal/webhooks has been retired in Phase E-3 per clean architectural boundaries.
+[PAYPAL_CLIENT_ID] payments/webhooks.py:4: and PayPal client credentials (PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET, PAYPAL_WEBHOOK_ID)
+[PAYPAL_CLIENT_SECRET] payments/webhooks.py:4: and PayPal client credentials (PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET, PAYPAL_WEBHOOK_ID)
+[PAYPAL_WEBHOOK_ID] payments/webhooks.py:4: and PayPal client credentials (PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET, PAYPAL_WEBHOOK_ID)
+
+Total Matching Lines Found: 4
+
+=== Analysis of Findings ===
+1. Active Credentials: ZERO. Neither PAYPAL_CLIENT_ID nor PAYPAL_CLIENT_SECRET is loaded or referenced in operational code.
+   (The sole hits in payments/webhooks.py are explanatory docstrings noting their removal).
+2. PayPal HTTP Calls: ZERO. No outbound HTTP requests to api-m.paypal.com or any PayPal endpoint.
+3. PayPal Webhook Route: The retired route /v1/paypal/webhooks exists in api/routes/webhooks.py strictly as a stateless HTTP 410 Gone tombstone.

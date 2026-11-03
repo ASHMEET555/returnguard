@@ -40,7 +40,10 @@ def _normalize_dt(val: Any) -> pd.Timestamp:
 class FeatureBuilder:
     """Builds point-in-time features strictly as-of an evaluation timestamp."""
 
-    def __init__(self, db_session: Any = None):
+    def __init__(self, merchant_id: str, db_session: Any = None):
+        if not merchant_id or not str(merchant_id).strip():
+            raise ValueError("merchant_id is required and cannot be empty")
+        self.merchant_id = str(merchant_id).strip()
         self.session = db_session
 
     def build(
@@ -50,6 +53,7 @@ class FeatureBuilder:
         order_record: Optional[Dict[str, Any]] = None,
         prior_records: Optional[List[Dict[str, Any]]] = None,
         db_session: Any = None,
+        merchant_id: Optional[str] = None,
     ) -> FeatureResult:
         """
         Builds the 15-feature vector strictly as-of `as_of` and serializes
@@ -74,6 +78,7 @@ class FeatureBuilder:
             Dataclass containing feature vector and canonical snapshot JSON.
         """
         session = db_session or self.session
+        scoped_mid = merchant_id or self.merchant_id
 
         # 1. Resolve cutoff timestamp
         if as_of is None:
@@ -112,7 +117,10 @@ class FeatureBuilder:
             feature_row = match[FEATURE_COLUMNS].iloc[0]
         elif session is not None:
             # Query from DB if available
-            order_obj = session.query(Order).filter(Order.id == order_id).first()
+            order_query = session.query(Order).filter(Order.id == order_id)
+            if scoped_mid:
+                order_query = order_query.filter(Order.merchant_id == scoped_mid)
+            order_obj = order_query.first()
             if not order_obj:
                 raise ValueError(f"Order {order_id} not found in database")
             # Build minimal frame from Order
@@ -164,11 +172,10 @@ class FeatureBuilder:
 
         # 4. Write to audit schema if session is provided
         if session is not None:
-            audit_record = (
-                session.query(AuditScoreEvent)
-                .filter(AuditScoreEvent.order_id == order_id)
-                .first()
-            )
+            audit_query = session.query(AuditScoreEvent).filter(AuditScoreEvent.order_id == order_id)
+            if scoped_mid:
+                audit_query = audit_query.filter(AuditScoreEvent.merchant_id == scoped_mid)
+            audit_record = audit_query.first()
             if audit_record:
                 audit_record.feature_snapshot_json = feature_snapshot_json
             else:
@@ -196,13 +203,26 @@ def build(
     order_record: Optional[Dict[str, Any]] = None,
     prior_records: Optional[List[Dict[str, Any]]] = None,
     db_session: Any = None,
+    merchant_id: Optional[str] = None,
 ) -> FeatureResult:
     """Convenience function returning the 15-feature result and writing snapshot."""
-    builder = FeatureBuilder(db_session=db_session)
+    actual_merchant_id = merchant_id or (order_record.get("merchant_id") if order_record else None)
+    if not actual_merchant_id and db_session is not None:
+        try:
+            ord_obj = db_session.query(Order).filter(Order.id == order_id).first()
+            if ord_obj:
+                actual_merchant_id = ord_obj.merchant_id
+        except Exception:
+            pass
+    if not actual_merchant_id:
+        actual_merchant_id = "merch_default"
+
+    builder = FeatureBuilder(merchant_id=actual_merchant_id, db_session=db_session)
     return builder.build(
         order_id=order_id,
         as_of=as_of,
         order_record=order_record,
         prior_records=prior_records,
         db_session=db_session,
+        merchant_id=actual_merchant_id,
     )

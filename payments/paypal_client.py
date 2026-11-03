@@ -1,5 +1,6 @@
-"""PayPal REST API client (sandbox only).
+"""PayPal REST API client stub.
 
-TODO: Handle OAuth v1 tokens, Orders v2 create / authorize / capture,
-and sandbox account interactions based on PAYPAL_ENV and environment credentials.
+NOTE (Phase E-3): ReturnGuard holds no PayPal credentials and does not call
+PayPal REST APIs directly. ShopPoint is the sole PayPal API client.
+Any dispute or payment actions are initiated through merchant-relayed events.
 """

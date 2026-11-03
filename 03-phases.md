@@ -1,312 +1,156 @@
-# 03 — Build phases A→H (ML layer updated; D–H unchanged)
+# 03 — Phases
 
-Do one phase at a time. Tick exit criteria only when evidence is in the phase report. Phase C is the bar. Do not start Phase D until C is green.
+Tags: [DONE] built and verified by test output; [PARTIAL] built, with an open verification item; [TODO] not started.
 
-Tags: **[REUSE]** verified and frozen, **[EXTEND]** additive change, **[NEW]** built in this plan, **[KEEP]** original plan unchanged.
-
----
-
-## Phase A — Adopt the verified ML layer, freeze data, keep the PayPal schema
-
-**Replaces:** original Phase A's COD/PayPal generator, parquet split and COD labels. Keeps the original schema (as schema only).
-
-**Goal:** Bring in the verified ML layer without edits. Reproduce its data. Freeze features, costs, datasets, and the database schema that Phases D–H need.
-
-### Tasks
-
-- [x] Create branch `ml-verified`. Copy the ML files listed in `00-codebase-map.md` section 1 with no edits. Commit as-is. **[REUSE]**
-- [x] Record the commit hash and a SHA-256 manifest of `ml/models/*.pkl` to `reports/artifact_manifest.json`. **[NEW]**
-- [x] Create a virtual environment with the pinned versions from `00-codebase-map.md`. **[REUSE]**
-- [x] Run the ML test subset. Expected 269 passing across 8 files. Save output to `reports/phase_a/pytest.txt`. **[REUSE]**
-- [x] Regenerate synthetic data with seed 42. Compare output hashes with the prior run. If they differ, record the cause. **[REUSE]**
-- [x] Set `IEEE_DATA_DIR`. Load IEEE and confirm 590,540 rows and 20,663 fraud labels. Record the currency note for `TransactionAmt` as UNVERIFIED. **[REUSE + NEW]**
-- [x] Verification 1: check `scale_pos_weight = 73.12` against training-split prevalence. Record it. **[NEW]**
-- [x] Verification 2: fix the IEEE train/validation boundary at day 110 so intervals do not overlap. Record the choice in `docs/split_decisions.md`. **[NEW]**
-- [x] Verification 4: decompose the Phase 17 cost (2,469,531) against stored predictions. Record the implied FN amount total. **[NEW]**
-- [x] Verification 5 and 6: confirm the PayPal 3-day honor period and the sandbox dispute reason and evidence type names. Mark UNVERIFIED until confirmed. **[NEW]**
-- [x] Generate `features/dictionary.yaml` from the verified 15 names in code. Check against `02-architecture.md` section C. Fail the phase on any mismatch. **[NEW]**
-- [x] Generate `features/dictionary_ieee_v1.yaml` for the IEEE variant. Document each mapping and each missing signal. **[NEW]**
-- [x] Keep the original schema tables as schema only: `order`, `payment`, `payment_event`, `dispute`, `evidence_pack`, `evidence_submission`, `merchant_audit`. Add `audit_score_event` with `feature_snapshot_json` (nullable). Migrations are idempotent. **[KEEP + EXTEND]**
-- [x] Run the audit layer tests on both SQLite and PostgreSQL, per decision M5. **[NEW]**
-- [x] Write `docs/data_mapping.md`: PayPal order fields to the verified transaction schema, with missing-field handling. **[NEW]**
-- [x] Seed adapter: a script that reads the verified synthetic transactions and writes an order-shaped file for Phase D's sandbox seed. Do not run it until Phase D. **[NEW]**
-- [x] Move the COD/RTO generator, parquet split, COD label code and the old 25-feature dictionary to `legacy/`. Do not import from `legacy/`. **[DROP]**
-- [x] Keep `LICENSE` and the defense pledge text. **[KEEP]**
-
-### Exit criteria
-
-- [x] Verified ML layer runs from a clean clone with the documented steps
-- [x] ML test subset matches baseline (269 passing)
-- [x] Artifact manifest matches files on disk
-- [x] Synthetic regeneration matches, or the difference is explained
-- [x] IEEE loads with expected counts; currency note recorded
-- [x] Verifications 1, 2, 4, 5 and 6 have recorded results
-- [x] Feature dictionaries match the code
-- [x] Schema migrations run twice without error on both databases
-
-**Next:** Phase B
+Do one phase at a time. A phase closes only when its exit criteria have evidence attached.
 
 ---
 
-## Phase B — Verify features, rules, rings and the order adapter
+## Phase A — ML layer adopted and frozen [PARTIAL]
 
-**Replaces:** original Phase B's COD spike rules, COD-specific features, and the old as-of builder spec. Rings are kept as display-only.
+- [x] Verified ML layer copied in without edits
+- [x] Feature dictionaries generated; checked against code
+- [x] Audit schema extended with `audit_score_events.feature_snapshot_json`
+- [x] Legacy COD/RTO code moved to `legacy/`
+- [x] Synthetic and IEEE loaders run (IEEE real-data tests skipped; `IEEE_DATA_DIR` not set in test run)
+- [ ] Artifact manifest matches disk. **Open:** `phase17_lgbm.pkl` listed as frozen, missing (decision D-MAN)
+- [ ] Schema migrations run on PostgreSQL. **Open:** skipped; SQLite only
+- [ ] Verification items 1, 2, 4, 5, 6 recorded with results. **Verify each against reports before ticking**
 
-**Goal:** Prove the 15 features are causal, the adapter is honest about missing data, and the rule and ring modules produce deterministic evidence without touching the model or the action.
+Exit: pending the three items above.
 
-### Tasks
+## Phase B — Features, rules, rings, adapter [PARTIAL]
 
-- [x] Leakage test for all 15 features: insert data after t, assert the vector at t is unchanged. **[NEW, verifies verified code]**
-- [ ] Leakage test for the IEEE variant and each IEEE aggregate column used as a feature. **[NEW]**
-- [x] Velocity test: a burst fixture raises `velocity_5min`, `velocity_30min` and `velocity_60min` above a clean fixture. **[NEW]**
-- [x] Cold-start test: first transaction for a customer uses sentinels; history-dependent explanations are filtered. **[NEW, verifies verified behaviour]**
-- [x] `features/builder.py`: `build(order_id, as_of)` returns the 15 vector and writes `feature_snapshot_json`. Same inputs give identical output. **[NEW]**
-- [x] Adapter test: a PayPal order with missing device and geo fields produces `feature_completeness < 1.0`, lists missing fields, and never fills them with invented values. **[NEW]**
-- [x] `rules/engine.py` with `spike_velocity` only. Burst fixture hits. Clean fixture does not. The rule never sets the action. **[NEW]**
-- [x] `rings/builder.py`: deterministic union-find over phone, address and device. Size-3 shared-address fixture is discovered. Size-2 pairs are not. Same input gives the same `ring_id`s. Display-only. **[NEW]**
-- [x] Read `backend/schemas/transaction.py` and `response.py`. Write `docs/api/ml_contract.md` describing the current request and response. New fields are additive. **[EXTEND]**
-- [x] Confirm audit rows store no customer ID, device ID or geography. **[REUSE, verify]**
-- [x] `scripts/explain_sample.py`: prints features, `feature_completeness`, rule hits, ring ID, and policy trace for sample synthetic and IEEE transactions. No training run needed. **[NEW]**
-- [x] Record in `docs/decisions.md`: rules and rings are evidence only; `spike_cod_heavy`, `spike_micro` and the 18-feature option are dropped. **[NEW]**
+- [x] Leakage tests for the 15 features (`test_leakage_pit.py`)
+- [x] Velocity and cold-start tests
+- [x] `features/builder.py` deterministic snapshot
+- [x] Adapter missing-field tests
+- [x] `spike_velocity` rule; does not set action
+- [x] Ring builder: fixtures, determinism, non-interference
+- [x] `docs/api/ml_contract.md` written
+- [ ] IEEE variant leakage check on real data. **Open:** skipped without `IEEE_DATA_DIR`
+- [ ] `scripts/explain_sample.py` runs on both datasets. **Open:** synthetic ring execution test is skipped; confirm the script on IEEE
 
-### Exit criteria
+Exit: pending the two items above.
 
-- [ ] Leakage tests pass for the 15 features and the IEEE variant
-- [x] Velocity, cold-start and adapter tests pass
-- [x] Rule and ring tests pass; neither changes the action
-- [x] `docs/api/ml_contract.md` matches the schemas
-- [ ] `scripts/explain_sample.py` runs on both datasets
-- [x] Full ML test suite still passes
+## Phase C — ML bar and score API [PARTIAL]
 
-**Next:** Phase C
+- [x] Synthetic test metrics reproduced: ROC-AUC 0.9684, PR-AUC 0.9009, precision 0.7847, recall 0.8818, cost ₹41,376.78
+- [x] Policy mapping unit tests; boundary tests at 0.15, 0.40, 0.80 and the amount threshold
+- [x] `POST /v1/score` returns the contract; fallback never returns `BLOCK`
+- [x] Shadow mode default on
+- [x] SHAP additivity and decision isolation tests
+- [ ] ROC-AUC 0.984 reconciled. **Open:** remove from all documents or trace the source (D-ROC)
+- [ ] IEEE Phase 17 metrics reproduced. **Open:** artifact and predictions absent; reported only
+- [ ] IEEE v2 candidate approved for use. **Not approved;** serving stays on frozen artifacts
+- [ ] README metrics section written with honest limits (this update)
 
----
+Exit: synthetic bar met and reproduced. IEEE bar reported, not reproduced.
 
-## Phase C — ML training, IEEE improvement, SHAP, holdout report, score API (THE BAR)
+## Phase D — PayPal payment path via ShopPoint [PARTIAL]
 
-**Replaces:** original Phase C (XGBoost, logistic baseline, holdout, score API). Adds SHAP as the first explanation layer.
+- [x] Authorize-then-capture with `intent: AUTHORIZE` (ShopPoint, mocked tests)
+- [x] Capture gate in shadow and enforced modes (mocked tests)
+- [x] Merchant APPROVE and REJECT paths (mocked tests)
+- [x] Replayed webhook is a no-op (mocked tests)
+- [x] Amount from `Order.totalPrice`; ownership and authorize idempotency tested
+- [x] 30 of 30 ShopPoint tests pass
+- [ ] **D3 reopened:** webhook signature verification is not implemented. Add `verify-webhook-signature` call; tests for valid, invalid and missing signature
+- [ ] D1 sandbox end-to-end run with saved logs in `reports/phase_d1/e2e/`
+- [ ] Sandbox capture after policy allows it, verified in the PayPal dashboard
+- [ ] Authorization expiry handling tested
+- [ ] **Decision D-SDK-8:** merchant-initiated void on REJECT signed off or removed
+- [ ] Raw ReturnGuard webhook route (`/v1/paypal/webhooks`) and its PayPal credentials removed (D-PP, D-RAW)
 
-**Goal:** Reproduce the verified results. Train or refresh LightGBM, Random Forest and logistic regression on both datasets. Improve IEEE precision on validation only. Attach SHAP. Publish the holdout report with ₹ cost. Serve the score API with fallbacks.
+Exit: pending the items above. Do not claim Phase D complete until the D3 signature fix and the sandbox run are attached.
 
-### C1 — Reproduce verified results
+## Phase E — Tenancy, authentication, audit [DONE]
 
-- [ ] Reproduce the synthetic test metrics (table in `02-architecture.md` section E) from `candidate_lgbm_v1.pkl`, days 50–59. Tolerance ±0.005. **[REUSE]**
-- [ ] Reproduce the IEEE Phase 17 metrics on days 140–182. Tolerance ±0.005 on ROC-AUC and recall, ±0.002 on precision. **[REUSE]**
-- [ ] Reproduce the logistic regression and Random Forest synthetic metrics. Tolerance ±0.005. **[REUSE]**
-- [ ] Record artifact names, versions and hashes in `reports/artifact_manifest.json`. **[NEW]**
+- [x] Inventory every route's auth status (verified: /health unauthenticated; all /v1/* routes require Bearer API key; unversioned /score removed)
+- [x] Remove PayPal credentials from ReturnGuard (.env.example, payments/webhooks.py cleaned; ShopPoint is sole PayPal client)
+- [x] merchants (tenant entity per D-E1), pi_keys tables; hashed keys; one-time display; rotation and revocation (scripts/create_api_key.py, legacy sentinel merch_legacy refused)
+- [x] merchant_id added to tenant-scoped tables with compound keys and indexes (idempotent migration db/migrations.py)
+- [x] Server-key authentication on all routes except health (uth/dependencies.py with get_current_merchant_id)
+- [x] Repository layer requires tenant argument (TenantScopedRepository in db/repositories/tenant_scoped.py)
+- [x] Per-tenant rate limits (uth/ratelimit.py in-memory sliding window, 429 with Retry-After)
+- [x] Policy, shadow and audit reconstruction scoped by tenant (GET /v1/decisions/{id}/audit, 404 for cross-tenant)
+- [x] Tests: unauthenticated → 401; cross-tenant ID → 404; conflicting body merchant_id → 400; legacy merchant refused
+- [x] Migrate 	est_webhooks.py to ShopPoint relay (POST /v1/transactions/events), disable raw route (POST /v1/paypal/webhooks returns 410 Gone)
+- [x] Embed-token endpoint (PyJWT) scheduled for Phase F alongside @returnguard/sdk client
 
-### C2 — Cost and threshold (validation only)
+Exit: 373 passing tests; multi-tenant isolation, relay ingestion, per-key rate limiting, audit reconstruction verified; zero PayPal credentials in ReturnGuard.
 
-- [ ] Cost is computed by `cost_model.py`: FP = ₹50, FN = 50% of amount. **[REUSE]**
-- [ ] Threshold sweep 0.30–0.80 on validation, with alert volume %, recall, precision and cost. Recall constraint applied as decided in M2. **[REUSE + NEW report]**
-- [ ] Choose τ on validation only. Synthetic τ = 0.40 is re-checked; IEEE τ = 0.35 is re-checked. Record both in `docs/decisions.md`. **[REUSE + NEW]**
-- [ ] If the IEEE recall constraint is not met (currently 79.8% vs 80%), follow the decision in M2 and record it. **[DECISION]**
-- [ ] Recompute IEEE cost in ₹ on the test split, with the currency-assumed label (M4). Show the Phase 17 cost units next to it with the decomposition from Phase A. **[NEW]**
+## Phase F — `@returnguard/sdk` [TODO]
 
-### C3 — IEEE precision improvement program (validation only)
+- [ ] Typed client: `scoreTransaction`, decisions list and detail, explanation, reviews (list and submit), analytics, model performance
+- [ ] `tokenProvider` callback; no token storage in the SDK
+- [ ] Cursor pagination; typed errors (401, 403, 404, 429, network)
+- [ ] Retry for reads only, one attempt
+- [ ] ES2017 build; no React import; no secrets in bundle (CI grep)
+- [ ] Contract tests against the running API; token-expiry renewal test
 
-Goal: raise IEEE precision above 6.3%, without giving up the recall agreed in M2. Target set in M3.
+Exit: contract tests pass against the running API; bundle grep clean.
 
-- [ ] Candidate 1: LightGBM hyperparameter search on validation AUC with the verified early-stopping rule. Keep `eval_metric='auc'` and `first_metric_only=True`. **[NEW]**
-- [ ] Candidate 2: class-weight variants around `scale_pos_weight`, each re-thresholded on validation. **[NEW]**
-- [ ] Candidate 3: IEEE feature variants from fields documented in `dictionary_ieee_v1.yaml` (card, address, email-domain match, product code, device type). Each new feature must pass the Phase B leakage test before use. **[NEW]**
-- [ ] Candidate 4: amount threshold for the IEEE amount rule, chosen on validation (M4). **[NEW]**
-- [ ] Log every candidate, including failures, in `reports/ieee_experiments.md` with validation cost, precision and recall. **[NEW]**
-- [ ] Select one candidate by validation cost, subject to the recall constraint. **[NEW]**
-- [ ] Evaluate the selected candidate once on the test split. Report the test result as is, even if it does not reach the target. **[NEW]**
-- [ ] If the selected candidate beats Phase 17, save it as `lgbm_ieee_v2` with its own manifest entry and get user approval before use (see Hard Rule 2 in AGENTS.md). Phase 17 remains available. **[NEW]**
+## Phase G — `@returnguard/react` and AG Grid [TODO]
 
-### C4 — Baselines and lift table
+- [ ] `ReturnGuardProvider`; hooks `useReturnGuard`, `useRiskDecisions`, `useRiskSummary`, `useTransactionRisk`, `useReviewQueue`
+- [ ] Components: `RiskScoreBadge`, `RiskDecisionGrid` (AG Grid Community), `ReviewQueue`, `RiskExplanation`, `RiskSummary`, `AuditTimeline`
+- [ ] Props for data, column overrides, render slots; no hardcoded tenant or demo data
+- [ ] Theming through CSS custom properties
+- [ ] Model performance panel: synthetic and IEEE in separate panels, with the honest-limits note
+- [ ] Verify ag-grid-react peer range in ShopPoint's installed tree (`npm ls ag-grid-react`); record in `docs/sdk/compatibility.md`
+- [ ] Build output parseable by react-scripts 3.4.3
+- [ ] Tests under React 16.13
 
-- [ ] Amount-only baseline (dataset-specific amount threshold) on the same test split. **[NEW]**
-- [ ] Lift table per dataset: amount-only, logistic regression, Random Forest, LightGBM (and `lgbm_ieee_v2` if approved). Precision, recall, F1, PR-AUC, ROC-AUC, cost in ₹. **[NEW]**
-- [ ] Synthetic and IEEE in separate sections. Never averaged. **[NEW]**
+Exit: components render with mocked and live data in ShopPoint on React 16.13; `npm ls` shows no peer warnings.
 
-### C5 — SHAP explainability
+## Phase H — ShopPoint integration [TODO]
 
-- [ ] `ml/explain/shap_service.py`: read-only top-K over the verified `explainability.py`. No change to SHAP values. **[EXTEND]**
-- [ ] Additivity test on at least 100 transactions per dataset: reconstructed vs predicted probability difference below 1e-4. **[REUSE, verify coverage]**
-- [ ] Deterministic templates for reason text, using only feature names, directions and stored values. **[REUSE]**
-- [ ] Test: SHAP output does not change probability, tier, policy rule or action. **[NEW]**
+- [ ] Install SDK and React packages into ShopPoint via local link
+- [ ] ShopPoint backend issues embed tokens for logged-in admins; server key in `config/config.env` only
+- [ ] Admin Risk page: `RiskSummary`, `RiskDecisionGrid`, `ReviewQueue`
+- [ ] Order details: `RiskScoreBadge` only
+- [ ] Review flow: ReturnGuard records decision; ShopPoint executes PayPal capture or void, idempotently, with the audit row first
+- [ ] Demonstrate a customised layout
+- [ ] Second tenant key cannot see ShopPoint's decisions
+- [ ] Grep check: no server key or PayPal secret in the React build
 
-### C6 — Holdout report
+Exit: live decisions shown for ShopPoint's tenant; review reaches PayPal idempotently; cross-tenant access blocked.
 
-- [ ] `ml/evaluate.py` writes `reports/holdout_metrics.md` and `.json`. Synthetic and IEEE in separate sections, split method stated. Confusion matrix at the operating threshold. Threshold sweep. ₹ cost. **[EXTEND]**
-- [ ] README metrics section: P, R, F1, cost, split method, per dataset. States IEEE precision (6.3% on Phase 17, or the improved figure if approved) and the honest-limits note. **[NEW]**
+## Phase I — Evidence Engine [TODO]
 
-### C7 — Policy mapping and score API
+- [ ] Evidence ingestion and storage, tenant-scoped
+- [ ] Association of evidence with payment and dispute
+- [ ] Completeness assessment and missing-document list
+- [ ] Grounded narrative draft (LLM outside the risk path)
+- [ ] Guardrail: injected ID, amount, tracking number rejected in test
+- [ ] JSON and Markdown evidence pack from stored rows
+- [ ] Human approval record required before submit
+- [ ] Submit executed by ShopPoint; sandbox-gated
 
-- [ ] `services/policy_mapping.py`: policy action → severity and suggested action, per section 4 of `01-brief.md`. Unit test every row. **[NEW]**
-- [ ] `POST /v1/score` returns the contract in `02-architecture.md` section G. Additive to the existing routes. **[EXTEND]**
-- [ ] Fallback when `model_status = unavailable`: amount-only policy result. Test: never `BLOCK`. **[NEW]**
-- [ ] `SHADOW_MODE=true` default in settings. Test confirms default. **[EXTEND]**
-- [ ] Policy boundary tests at probability 0.15, 0.40 and 0.80 and at the amount threshold, confirming rule order. **[NEW]**
+Exit: pack generated from stored rows; guardrail test passes; submission refused without approval.
 
-### Exit criteria (the bar)
+## Phase J — Submission [TODO]
 
-- [ ] Synthetic and IEEE metrics reproduce within tolerance
-- [ ] Lift table and holdout report exist, separated per dataset, with split method
-- [ ] ₹ cost table published at the operating thresholds, with IEEE currency note
-- [ ] IEEE improvement program logged; selected candidate evaluated on test once
-- [ ] SHAP additivity passes; SHAP does not change any decision
-- [ ] Score API returns the contract; fallback never blocks; `shadow=true` by default
-- [ ] Policy mapping unit tests pass
-- [ ] README metrics section written with honest limits
+- [ ] Demo: PayPal sandbox checkout → authorization → ReturnGuard score → policy → dashboard → review → ShopPoint-executed capture → tenant isolation → SDK docs
+- [ ] Demo video under 3 minutes, public on YouTube
+- [ ] Public repository with LICENSE in About
+- [ ] README and integration guide complete
+- [ ] Fresh clone runs the documented steps
 
-**Next:** Phase D
-
----
-
-## Phase D — PayPal payment path (sandbox)
-
-**[KEEP]** Unchanged from the original plan.
-
-**Goal:** A real PayPal sandbox order runs through the ReturnGuard policy. Captures stay separate from scoring.
-
-### Build checklist
-
-- [x] `payments/paypal_client.py`: OAuth token from sandbox credentials (env vars only)
-- [x] `POST /v1/payments/create`: sandbox order with `intent` per `SHADOW_MODE`
-- [x] Buyer approval in sandbox checkout (Next.js page with PayPal SDK button)
-- [x] Score on approval, write `audit_score_event`
-- [x] Policy gate: `allow` and `info` capture; `warning` waits for merchant; `critical` holds
-- [x] `POST /v1/payments/{id}/authorize` and `POST /v1/payments/{id}/capture`
-- [x] Authorization review deadline stored; expiry notifies merchant
-- [x] `POST /v1/paypal/webhooks`: signature verify, `payment_event` by `event_id`, duplicate replay is a no-op
-- [x] Seed script creates sandbox orders from the adapter output in Phase A (seed adapter)
-
-### Exit criteria
-
-- [x] Sandbox payment captured after ReturnGuard policy allows it
-- [x] A held (`critical`) order is not captured until merchant action
-- [x] Replayed webhook event does not change state
-- [x] No PayPal secret appears in git history
-
-**Next:** Phase E
+Exit: all submission items checked with evidence.
 
 ---
 
-## Phase E — Policy, shadow, audit
-
-**[KEEP]** Unchanged from the original plan.
-
-**Goal:** Defense-only semantics. Shadow first. No silent money block.
-
-### Build checklist
-
-- [ ] `services/policy.py`: severity → action table; the LLM cannot change it
-- [ ] `SHADOW_MODE=true` default; shadow never changes a payment outcome
-- [ ] `audit_score_event`, `audit_evidence_event`, `merchant_audit` tables
-- [ ] Query helper: reconstruct the decision for an `order_id` end to end
-- [ ] Calibration note: shadow high-risk vs actual labels on test
-
-### Exit criteria
-
-- [ ] No code path auto-cancels, voids, rejects or refunds an order
-- [ ] Audit log reconstructs score, policy action, capture decision and evidence approval
-
-**Next:** Phase F
-
----
-
-## Phase F — AG Grid investigation console
-
-**[KEEP]** Unchanged from the original plan.
-
-**Goal:** The primary merchant interface. Built on AG Grid Community.
-
-### Build checklist
-
-- [ ] Transaction explorer: sort, filter, pagination, severity badges as cell renderers
-- [ ] Abuse-ring explorer: filter by `ring_id`, click row to open ring drawer
-- [ ] Dispute investigation: click row to open a React detail drawer (PayPal transaction ID, order history, score, reason codes, rule hits, ring, evidence status)
-- [ ] Model performance view: precision, recall, F1, FP cost and threshold table, per dataset
-- [ ] Seed button and fixtures for demo orders
-- [ ] No Enterprise-only features in the required path. Master-detail is optional, only with a trial key from an env var
-
-### Exit criteria
-
-- [ ] All four views load from the API with seeded data
-- [ ] Repo runs with AG Grid Community alone (no license key)
-
-**Next:** Phase G
-
----
-
-## Phase G — Evidence verifier, LLM assistant, gated submit
-
-**[KEEP]** Unchanged from the original plan. The evidence bundle may read the SHAP top-K and rule hits from Phase C, as stored data. It does not recompute them.
-
-**Goal:** Dispute evidence drafted from records, LLM explanations that cannot invent IDs, and a sandbox-only submit after human approval.
-
-### Build checklist
-
-- [ ] `disputes/paypal_disputes.py`: list and get sandbox disputes; store `evidences` requirements
-- [ ] Seed sandbox disputes (buyer enablement in sandbox; create dispute through sandbox endpoints)
-- [ ] `POST /v1/disputes/{id}/evidence-pack`: JSON + markdown, mapped to PayPal evidence types
-- [ ] Completeness % and heuristic `win_likelihood` (documented as a heuristic)
-- [ ] Optional prior-order match helper, labelled as an internal helper
-- [ ] `assistant/llm.py` and `assistant/guardrails.py`: unknown IDs or invented amounts are rejected
-- [ ] `POST /v1/assistant/chat` explains a flagged order from stored records only
-- [ ] `POST /v1/disputes/{id}/approve`: writes `merchant_audit`
-- [ ] `POST /v1/disputes/{id}/submit`: only if `PAYPAL_SUBMIT_ENABLED=true`, sandbox only, status `WAITING_FOR_SELLER_RESPONSE`, approval exists, pack hash matches
-- [ ] Records `evidence_submission` with result
-
-### Exit criteria
-
-- [ ] Judge can open a readable pack and see pass/fail per PayPal evidence type
-- [ ] LLM test: ask about an order, inject a fake ID into the output, guardrail rejects it
-- [ ] Submit returns 403 when the flag is off, and works in sandbox when it is on
-- [ ] Submit without approval is refused
-
-**Next:** Phase H
-
----
-
-## Phase H — Submission package & demo
-
-**[KEEP]** Unchanged from the original plan.
-
-**Goal:** Everything the hackathon asks for, in a 5-minute reproducible demo under the 3-minute video limit.
-
-### Demo beats (video ≤ 3 min; live demo ≤ 5 min)
-
-1. Clean prepaid loyal order (PayPal sandbox) → low score, captured
-2. COD first order, bad pincode → elevated, step-up shown
-3. Velocity spike → rule hit badge
-4. Address ring → ring badge and ring drawer
-5. Model performance: P/R and cost per dataset
-6. PayPal dispute → evidence pack → LLM explanation → human approve → sandbox submit
-7. Show the PayPal sandbox transaction ID and the audit row
-
-### Submission checklist
-
-- [ ] Public GitHub repo with LICENSE visible in About
-- [ ] README: problem, features, setup and run steps, sandbox setup, `.env.example`
-- [ ] Text description covering features and functionality
-- [ ] Tools section: LightGBM, scikit-learn, SHAP, LLM provider, PayPal APIs, AG Grid Community; how each is used
-- [ ] Hosted demo URL (optional) or clean-clone run instructions tested on a second machine
-- [ ] Demo video under 3 minutes, shows the project running, uploaded to YouTube publicly
-- [ ] No third-party logos or copyrighted music without permission
-- [ ] Full DoD in `01-brief.md` checked
-
-### Exit criteria
-
-- [ ] Fresh clone runs with the documented steps
-- [ ] Seed reproducible on a clean machine
-- [ ] Submission form complete before the deadline confirmed on the hackathon page
-
----
-
-## Suggested calendar (solo / weekend pace)
+## Calendar (indicative, weekend pace)
 
 | Block | Phases |
-|-------|--------|
-| 1 | A + B (adopt and verify the ML layer) |
-| 2 | C (the bar: training, IEEE improvement, SHAP, holdout, score API) |
-| 3 | D (PayPal sandbox payment path) |
-| 4 | E + F (policy, console) |
-| 5 | G (evidence, LLM, gated submit) |
-| 6 | H (submission, video, rehearsal) |
+|---|---|
+| 1 | Close A–D open items (D3 signature fix, sandbox run, manifest decision) |
+| 2 | E (tenancy and auth) — COMPLETED |
+| 3 | F (SDK) |
+| 4 | G (React and AG Grid) |
+| 5 | H (ShopPoint integration) |
+| 6 | I if time allows, then J |
 
-If short on time, cut in this order: LLM polish → master-detail → extra console views. Never cut Phase C, the PayPal sandbox payment in Phase D, or the audit trail in Phase E.
+Cut order if short on time: I, then the optional dashboard panels. Never cut E, shadow mode, the webhook signature check, or the audit trail.

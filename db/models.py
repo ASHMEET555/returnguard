@@ -12,6 +12,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
@@ -65,6 +66,7 @@ class Address(Base):
     __tablename__ = "addresses"
 
     id = Column(String(64), primary_key=True)
+    merchant_id = Column(String(64), ForeignKey("merchants.id"), nullable=True, index=True)
     customer_id = Column(String(64), ForeignKey("customers.id"), nullable=False)
     line1 = Column(String(255), nullable=False)
     locality = Column(String(255), nullable=True)
@@ -89,6 +91,7 @@ class Device(Base):
     __tablename__ = "devices"
 
     id = Column(String(64), primary_key=True)
+    merchant_id = Column(String(64), ForeignKey("merchants.id"), nullable=True, index=True)
     customer_id = Column(String(64), ForeignKey("customers.id"), nullable=False)
     device_hash = Column(String(128), nullable=False, index=True)
     ip_address = Column(String(45), nullable=True)
@@ -211,6 +214,7 @@ class Refund(Base):
     __tablename__ = "refunds"
 
     id = Column(String(64), primary_key=True)
+    merchant_id = Column(String(64), ForeignKey("merchants.id"), nullable=True, index=True)
     payment_id = Column(String(64), ForeignKey("payments.id"), nullable=False)
     amount = Column(Numeric(12, 2), nullable=False)
     currency = Column(String(3), default="INR", nullable=False)
@@ -226,12 +230,17 @@ class Refund(Base):
 
 
 class PaymentEvent(Base):
-    """Raw verified PayPal webhook events stored idempotently."""
+    """Normalized relayed payment events stored idempotently per merchant."""
 
     __tablename__ = "payment_events"
+    __table_args__ = (
+        UniqueConstraint("merchant_id", "event_id", name="uq_payment_events_merchant_event"),
+    )
 
     id = Column(String(64), primary_key=True)
-    event_id = Column(String(128), unique=True, nullable=False, index=True)
+    merchant_id = Column(String(64), ForeignKey("merchants.id"), nullable=False, index=True)
+    event_id = Column(String(128), nullable=False, index=True)
+    order_reference = Column(String(64), nullable=True, index=True)
     event_type = Column(String(128), nullable=False)
     summary = Column(String(255), nullable=True)
     resource_type = Column(String(64), nullable=True)
@@ -250,6 +259,7 @@ class Dispute(Base):
     __tablename__ = "disputes"
 
     id = Column(String(64), primary_key=True)
+    merchant_id = Column(String(64), ForeignKey("merchants.id"), nullable=True, index=True)
     payment_id = Column(String(64), ForeignKey("payments.id"), nullable=False)
     paypal_dispute_id = Column(String(128), unique=True, nullable=True, index=True)
     reason = Column(String(128), nullable=False)
@@ -274,6 +284,7 @@ class EvidencePack(Base):
     __tablename__ = "evidence_packs"
 
     id = Column(String(64), primary_key=True)
+    merchant_id = Column(String(64), ForeignKey("merchants.id"), nullable=True, index=True)
     dispute_id = Column(String(64), ForeignKey("disputes.id"), nullable=False)
     pack_hash = Column(String(128), nullable=False)
     completeness_pct = Column(Numeric(5, 2), nullable=False)
@@ -296,6 +307,7 @@ class EvidenceSubmission(Base):
     __tablename__ = "evidence_submissions"
 
     id = Column(String(64), primary_key=True)
+    merchant_id = Column(String(64), ForeignKey("merchants.id"), nullable=True, index=True)
     evidence_pack_id = Column(
         String(64), ForeignKey("evidence_packs.id"), nullable=False
     )

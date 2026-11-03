@@ -94,3 +94,24 @@ This document formally records architectural, evaluation, and policy decisions e
 ### D-B4: Deferral of IEEE Leakage Check to Phase C
 - **Decision**: External IEEE-CIS dataset evaluation and its dedicated point-in-time leakage audit are explicitly moved to Phase C.
 - **Rationale**: Phase B focuses entirely on feature builder determinism, sliding window verification, rules calibration, and ring graph generation on synthetic transaction data without model retraining or test split contamination.
+
+
+---
+
+### D-E1: Merchant Entity as the Tenant (No Redundant Tenants Table)
+- **Decision**: The existing `merchants` table serves as the primary tenant entity across ReturnGuard. A separate `tenants` table is not introduced.
+- **Context & Rationale**:
+  1. *Entity Correspondence*: Every business using ReturnGuard is an independent merchant. There is a strict 1:1 mapping between a tenant boundary and a registered merchant organization.
+  2. *Indirection Overhead*: Creating a `tenants` table would introduce redundant foreign key joins (`orders` -> `merchants` -> `tenants`) without providing functional partitioning.
+  3. *Clean Architecture Scoping*: All tenant-scoped entities (`customers`, `addresses`, `devices`, `orders`, `payments`, `payment_events`, `disputes`, `evidence_packs`, `audit_score_events`, `api_keys`) link directly via `merchant_id`. Compound keys (such as `(merchant_id, customer_id)` and `(merchant_id, event_id)`) enforce strict cryptographic and data isolation at the database layer.
+
+---
+
+### D-E2: Phase E Architecture Closure & Tenancy Invariants
+- **Decision**: Phase E (Multi-Tenancy, Authentication & Tenant Hardening) is formally closed with the following locked architectural guarantees:
+  1. *Authentication Enforcement*: Every `/v1/*` endpoint requires Bearer API Key authentication (`Authorization: Bearer <key>`). The public health check `/health` is the sole unauthenticated path.
+  2. *Tenant Identity*: Tenant identity is extracted exclusively from the validated API key (`auth_merchant_id`). Any conflicting `merchant_id` in request payloads causes an immediate fail-closed `HTTP 400 Bad Request`.
+  3. *Information Concealment*: Cross-tenant resource lookups (decisions, orders, events) return `HTTP 404 Not Found` (never `403 Forbidden`) to eliminate resource enumeration side-channels.
+  4. *Zero ReturnGuard PayPal Footprint*: ReturnGuard holds zero PayPal client credentials, tokens, or webhook secrets. The storefront (`ShopPoint`) is the sole PayPal client. Incoming events are ingested via the authenticated normalized relay endpoint `POST /v1/transactions/events`, and the legacy route `POST /v1/paypal/webhooks` is retired with `HTTP 410 Gone`.
+  5. *Per-Key Sliding-Window Rate Limiting*: Rate limiting is enforced per API key (`RATE_LIMIT_PER_MINUTE`, default 60) in-process after authentication, returning `HTTP 429 Too Many Requests` with `Retry-After`. Unauthenticated traffic cannot exhaust tenant budgets.
+  6. *Read-Only Audit Reconstruction*: `GET /v1/decisions/{decision_id}/audit` provides immutable, read-only decision reconstruction for the owning tenant with zero state mutation.

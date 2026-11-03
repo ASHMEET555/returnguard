@@ -7,6 +7,7 @@ from typing import Optional
 from fastapi import Depends, Header, HTTPException, status
 from sqlalchemy.orm import Session
 
+from auth.ratelimit import get_rate_limiter
 from db.models import APIKey
 from db.session import get_db
 
@@ -25,7 +26,8 @@ def get_api_key_merchant(
     2. Computes SHA-256 hash of the provided plaintext secret.
     3. Looks up active, unrevoked key in the database by key_hash.
     4. Performs constant-time comparison via hmac.compare_digest.
-    5. Returns the associated merchant_id.
+    5. Evaluates rate limiting on api_key.id (HTTP 429 with Retry-After if exceeded).
+    6. Returns the associated merchant_id.
 
     Any authentication failure raises HTTP 401 Unauthorized with identical generic detail.
     """
@@ -78,6 +80,16 @@ def get_api_key_merchant(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=GENERIC_UNAUTHORIZED_DETAIL,
             headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Rate limiting runs strictly AFTER authentication
+    limiter = get_rate_limiter()
+    is_allowed, retry_after = limiter.check(api_key.id)
+    if not is_allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Rate limit exceeded. Try again in {retry_after} seconds.",
+            headers={"Retry-After": str(retry_after)},
         )
 
     return api_key.merchant_id
