@@ -12,6 +12,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
@@ -229,13 +230,17 @@ class Refund(Base):
 
 
 class PaymentEvent(Base):
-    """Raw verified PayPal webhook events stored idempotently."""
+    """Normalized relayed payment events stored idempotently per merchant."""
 
     __tablename__ = "payment_events"
+    __table_args__ = (
+        UniqueConstraint("merchant_id", "event_id", name="uq_payment_events_merchant_event"),
+    )
 
     id = Column(String(64), primary_key=True)
-    merchant_id = Column(String(64), ForeignKey("merchants.id"), nullable=True, index=True)
-    event_id = Column(String(128), unique=True, nullable=False, index=True)
+    merchant_id = Column(String(64), ForeignKey("merchants.id"), nullable=False, index=True)
+    event_id = Column(String(128), nullable=False, index=True)
+    order_reference = Column(String(64), nullable=True, index=True)
     event_type = Column(String(128), nullable=False)
     summary = Column(String(255), nullable=True)
     resource_type = Column(String(64), nullable=True)

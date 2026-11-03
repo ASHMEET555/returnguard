@@ -80,6 +80,51 @@ def run_migrations(target_engine=None):
                     except Exception:
                         pass
 
+        # 3b. Scope payment_events uniqueness to (merchant_id, event_id) and add order_reference
+        if "payment_events" in existing_tables:
+            pe_cols = {col["name"] for col in inspector.get_columns("payment_events")}
+            if "order_reference" not in pe_cols:
+                try:
+                    conn.execute(text("ALTER TABLE payment_events ADD COLUMN order_reference VARCHAR(64);"))
+                    conn.commit()
+                except Exception:
+                    pass
+
+            pe_indexes = inspector.get_indexes("payment_events")
+            single_event_id_unique = any(
+                idx.get("unique") and idx.get("column_names") == ["event_id"]
+                for idx in pe_indexes
+            )
+            has_composite_unique = any(
+                idx.get("unique") and set(idx.get("column_names") or []) == {"merchant_id", "event_id"}
+                for idx in pe_indexes
+            )
+
+            if single_event_id_unique or not has_composite_unique:
+                try:
+                    conn.execute(text("DROP INDEX IF EXISTS ix_payment_events_event_id;"))
+                    conn.commit()
+                except Exception:
+                    pass
+
+                try:
+                    conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_events_merchant_event ON payment_events (merchant_id, event_id);"))
+                    conn.commit()
+                except Exception:
+                    pass
+
+                try:
+                    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_payment_events_event_id ON payment_events (event_id);"))
+                    conn.commit()
+                except Exception:
+                    pass
+
+                try:
+                    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_payment_events_order_reference ON payment_events (order_reference);"))
+                    conn.commit()
+                except Exception:
+                    pass
+
         # 4. Backfill existing rows with NULL merchant_id to 'merch_legacy' if any exist
         # Check if any table has rows where merchant_id IS NULL
         has_null_rows = False
