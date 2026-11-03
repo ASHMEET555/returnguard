@@ -3,7 +3,6 @@ Risk scoring endpoint (Phase C7 / Phase E-2 Multi-Tenant Authenticated).
 
 Implements:
 - POST /v1/score: Online risk scoring and policy evaluation (tenant-scoped)
-- POST /score: Alias for /v1/score
 - GET /v1/decisions/{decision_id}: Retrieve stored risk decision scoped to authenticated merchant
 
 Includes fallback to amount-only decision when model is unavailable (never blocks).
@@ -86,12 +85,6 @@ class ScoreResponse(BaseModel):
     response_model=ScoreResponse,
     status_code=status.HTTP_200_OK,
     summary="Online risk scoring and policy evaluation",
-)
-@router.post(
-    "/score",
-    response_model=ScoreResponse,
-    status_code=status.HTTP_200_OK,
-    include_in_schema=False,
 )
 def score_transaction(
     payload: ScoreRequest,

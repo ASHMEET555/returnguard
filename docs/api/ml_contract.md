@@ -115,7 +115,7 @@ Below is the complete score response contract as specified in `02-architecture.m
 ## 5. Authentication & Merchant Tenancy (`POST /v1/score`)
 
 ### Required Authorization Header
-`POST /v1/score` and `POST /score` require Bearer API key authentication:
+`POST /v1/score` requires Bearer API key authentication (unversioned `/score` alias was retired in Phase E-4):
 ```http
 Authorization: Bearer <api_key>
 ```

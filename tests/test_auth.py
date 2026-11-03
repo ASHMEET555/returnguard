@@ -120,10 +120,9 @@ def test_1_no_auth_header_returns_401(client):
     assert response.status_code == 401
     assert response.json()["detail"] == "Invalid or missing authentication credentials"
 
-    # Also check /score alias
+    # Removed /score alias returns 404 Not Found (Phase E-4)
     alias_resp = client.post("/score", json=SAMPLE_SCORE_PAYLOAD)
-    assert alias_resp.status_code == 401
-    assert alias_resp.json()["detail"] == "Invalid or missing authentication credentials"
+    assert alias_resp.status_code == 404
 
 
 # 2. Malformed headers
