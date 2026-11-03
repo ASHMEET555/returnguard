@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from auth.api_keys import get_api_key_merchant
+from auth.embed_tokens import AuthContext, require_read_or_review_auth
 from db.models import AuditScoreEvent
 from db.repositories.tenant_scoped import TenantScopedRepository
 from db.session import get_db
@@ -181,7 +182,7 @@ def score_transaction(
 )
 def get_decision_by_id(
     decision_id: str,
-    auth_merchant_id: str = Depends(get_api_key_merchant),
+    auth: AuthContext = Depends(require_read_or_review_auth),
     db: Session = Depends(get_db),
 ) -> ScoreResponse:
     """
@@ -191,7 +192,7 @@ def get_decision_by_id(
     - Scoped strictly to the authenticated merchant.
     - If the decision belongs to another merchant or does not exist, returns HTTP 404 (NEVER HTTP 403).
     """
-    repo = TenantScopedRepository(db, auth_merchant_id)
+    repo = TenantScopedRepository(db, auth.tenant_id)
     audit_row = repo.get_decision(decision_id)
 
     if not audit_row:
@@ -247,7 +248,7 @@ def get_decision_by_id(
 )
 def get_decision_audit_reconstruction(
     decision_id: str,
-    auth_merchant_id: str = Depends(get_api_key_merchant),
+    auth: AuthContext = Depends(require_read_or_review_auth),
     db: Session = Depends(get_db),
 ):
     """
@@ -257,7 +258,7 @@ def get_decision_audit_reconstruction(
     Strictly read-only; writes zero database rows.
     Returns HTTP 404 if the decision is not found or belongs to another merchant.
     """
-    repo = TenantScopedRepository(db, auth_merchant_id)
+    repo = TenantScopedRepository(db, auth.tenant_id)
     audit_row = repo.get_decision(decision_id)
 
     if not audit_row:
@@ -332,3 +333,77 @@ def get_decision_audit_reconstruction(
             "relay_events": relay_events,
         },
     }
+
+
+class DecisionsListResponse(BaseModel):
+    items: List[ScoreResponse]
+    next_cursor: Optional[str] = None
+    limit: int
+
+
+@router.get(
+    "/v1/decisions",
+    response_model=DecisionsListResponse,
+    status_code=status.HTTP_200_OK,
+    summary="List stored risk decisions with stable cursor pagination",
+)
+def list_decisions(
+    cursor: Optional[str] = None,
+    limit: int = 50,
+    auth: AuthContext = Depends(require_read_or_review_auth),
+    db: Session = Depends(get_db),
+) -> DecisionsListResponse:
+    """
+    List decisions for the authenticated tenant.
+    Cursor-based pagination ordered by created_at DESC, id DESC.
+    """
+    repo = TenantScopedRepository(db, auth.tenant_id)
+    items, next_cursor = repo.list_decisions(cursor=cursor, limit=limit)
+
+    results = []
+    for audit_row in items:
+        reason_codes = []
+        if audit_row.reason_codes_json:
+            try:
+                raw_reasons = json.loads(audit_row.reason_codes_json)
+                reason_codes = [ReasonCode(**r) for r in raw_reasons]
+            except Exception:
+                reason_codes = []
+
+        rule_hits = []
+        if audit_row.rule_hits_json:
+            try:
+                rule_hits = json.loads(audit_row.rule_hits_json)
+            except Exception:
+                rule_hits = []
+
+        results.append(
+            ScoreResponse(
+                order_id=audit_row.order_id,
+                channel=audit_row.channel,
+                risk_score=float(audit_row.risk_score),
+                risk_score_100=int(round(float(audit_row.risk_score) * 100)),
+                tier=audit_row.tier,
+                policy_rule=audit_row.policy_rule,
+                policy_action=audit_row.policy_action,
+                severity=audit_row.severity,
+                suggested_action=audit_row.suggested_action,
+                reason_codes=reason_codes,
+                rule_hits=rule_hits,
+                ring_id=audit_row.ring_id,
+                model_version=audit_row.model_version,
+                dataset="synthetic",
+                threshold=float(audit_row.threshold),
+                model_status=audit_row.model_status,
+                feature_completeness=float(audit_row.feature_completeness),
+                explanation_status=audit_row.explanation_status,
+                shadow=bool(audit_row.shadow),
+                decision_id=audit_row.decision_id,
+            )
+        )
+
+    return DecisionsListResponse(
+        items=results,
+        next_cursor=next_cursor,
+        limit=min(max(1, limit), 100),
+    )
