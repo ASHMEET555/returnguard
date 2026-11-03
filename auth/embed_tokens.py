@@ -23,6 +23,7 @@ EMBED_EXPIRY_SECONDS = 600  # 10 minutes
 
 class EmbedTokenRequest(BaseModel):
     sub: str = Field(..., description="End-user or session ID supplied by merchant")
+    ttl_seconds: Optional[int] = Field(default=None, description="Optional custom TTL in seconds")
     scopes: Optional[List[str]] = Field(
         default_factory=lambda: ["read", "reviews"],
         description="Permission scopes granted to the embed token",
@@ -80,7 +81,8 @@ def create_embed_token(
     signing_key = get_embed_signing_key()
 
     now = datetime.datetime.now(datetime.timezone.utc)
-    exp = now + datetime.timedelta(seconds=EMBED_EXPIRY_SECONDS)
+    ttl = max(1, min(payload.ttl_seconds or EMBED_EXPIRY_SECONDS, 86400))
+    exp = now + datetime.timedelta(seconds=ttl)
     now_ts = int(now.timestamp())
     exp_ts = int(exp.timestamp())
 
@@ -99,7 +101,7 @@ def create_embed_token(
     return EmbedTokenResponse(
         token=token,
         token_type="Bearer",
-        expires_in=EMBED_EXPIRY_SECONDS,
+        expires_in=ttl,
         expires_at=exp_ts,
     )
 

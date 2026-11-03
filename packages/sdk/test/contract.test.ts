@@ -3,13 +3,15 @@ import { spawn, ChildProcess } from "node:child_process";
 import * as path from "node:path";
 import { ReturnGuardClient } from "../src/client";
 import { createRenewingTokenProvider } from "../src/auth";
-import { AuthenticationError } from "../src/errors";
+import { AuthenticationError, NotFoundError, RateLimitError } from "../src/errors";
 
 const TEST_PORT = 8765;
 const BASE_URL = `http://127.0.0.1:${TEST_PORT}`;
 const SIGNING_KEY = "super_secure_embed_signing_key_at_least_32_bytes_long!";
 const TEST_API_KEY = "rg_live_contract_test_key_001";
 const TEST_MERCHANT_ID = "merch_contract_e2e";
+const TEST_MERCHANT_B_ID = "merch_contract_tenant_b";
+const TEST_API_KEY_B = "rg_live_contract_test_key_b";
 const REPO_ROOT = path.resolve(__dirname, "../../..");
 
 let serverProc: ChildProcess | null = null;
@@ -29,7 +31,7 @@ async function waitForServer(url: string, maxAttempts = 30): Promise<void> {
 
 describe("HTTP Contract Tests against running ReturnGuard API", () => {
   beforeAll(async () => {
-    // Seed test merchant and API key into DB
+    // Seed test merchants and API keys into DB
     const setupScript = `
 import sys
 sys.path.insert(0, r"${REPO_ROOT}")
@@ -38,23 +40,26 @@ from db.models import Merchant, APIKey
 import hashlib, uuid
 
 db = SessionLocal()
-m = db.query(Merchant).filter(Merchant.id == '${TEST_MERCHANT_ID}').first()
-if not m:
-    m = Merchant(id='${TEST_MERCHANT_ID}', name='Contract Test Merchant', email='contract@test.com')
-    db.add(m)
+def ensure_merchant(m_id, name, email, key_raw):
+    m = db.query(Merchant).filter(Merchant.id == m_id).first()
+    if not m:
+        m = Merchant(id=m_id, name=name, email=email)
+        db.add(m)
+    h = hashlib.sha256(key_raw.encode('utf-8')).hexdigest()
+    k = db.query(APIKey).filter(APIKey.merchant_id == m_id).first()
+    if not k:
+        k = APIKey(
+            id=str(uuid.uuid4()),
+            merchant_id=m_id,
+            key_prefix='rg_live_',
+            key_hash=h,
+            name=f'{name} Key',
+            is_active=True,
+        )
+        db.add(k)
 
-h = hashlib.sha256('${TEST_API_KEY}'.encode('utf-8')).hexdigest()
-k = db.query(APIKey).filter(APIKey.merchant_id == '${TEST_MERCHANT_ID}').first()
-if not k:
-    k = APIKey(
-        id=str(uuid.uuid4()),
-        merchant_id='${TEST_MERCHANT_ID}',
-        key_prefix='rg_live_',
-        key_hash=h,
-        name='Contract Test Key',
-        is_active=True,
-    )
-    db.add(k)
+ensure_merchant('${TEST_MERCHANT_ID}', 'Contract Test Merchant', 'contract@test.com', '${TEST_API_KEY}')
+ensure_merchant('${TEST_MERCHANT_B_ID}', 'Contract Test Merchant B', 'contract_b@test.com', '${TEST_API_KEY_B}')
 db.commit()
 db.close()
 `;
@@ -110,7 +115,6 @@ db.close()
   });
 
   it("embed token client: reads decisions, analytics and models without score permissions", async () => {
-    // 1. Merchant backend issues embed token
     const serverClient = new ReturnGuardClient({
       baseUrl: BASE_URL,
       apiKey: TEST_API_KEY,
@@ -123,7 +127,6 @@ db.close()
     });
     expect(tokenRes.token).toBeDefined();
 
-    // 2. Client SDK initialized with renewing tokenProvider
     const tokenProvider = createRenewingTokenProvider({
       fetchToken: async () => tokenRes.token,
     });
@@ -133,22 +136,81 @@ db.close()
       tokenProvider,
     });
 
-    // Decisions list
     const decisions = await embedClient.decisions.list({ limit: 5 });
     expect(Array.isArray(decisions.items)).toBe(true);
 
-    // Analytics summary
     const analytics = await embedClient.analytics.summary();
     expect(analytics.tenant_id).toBe(TEST_MERCHANT_ID);
 
-    // Model performance
     const perf = await embedClient.models.performance();
     expect(perf.synthetic.dataset_name).toBe("synthetic");
     expect(perf.ieee_cis.dataset_name).toBe("ieee_cis");
 
-    // Embed token is forbidden on scoreTransaction
     await expect(
       embedClient.scoreTransaction({ amount: 100 })
     ).rejects.toThrow(AuthenticationError);
   });
+
+  it("token-expiry renewal: renews short TTL token over live server and handles 401 renewal", async () => {
+    const serverClient = new ReturnGuardClient({
+      baseUrl: BASE_URL,
+      apiKey: TEST_API_KEY,
+    });
+
+    let fetchCount = 0;
+    const fetchShortTtlToken = async () => {
+      fetchCount++;
+      const res = await (serverClient as any).transport.request<{ token: string }>({
+        method: "POST",
+        path: "/v1/auth/embed-tokens",
+        body: { sub: `user_ttl_${fetchCount}`, ttl_seconds: 3 },
+      });
+      return res.token;
+    };
+
+    const tokenProvider = createRenewingTokenProvider({
+      fetchToken: fetchShortTtlToken,
+      refreshMarginSeconds: 1, // Proactive refresh when remaining <= 1s
+    });
+
+    const client = new ReturnGuardClient({
+      baseUrl: BASE_URL,
+      tokenProvider,
+    });
+
+    // 1. Initial successful call
+    const firstAnalytics = await client.analytics.summary();
+    expect(firstAnalytics.tenant_id).toBe(TEST_MERCHANT_ID);
+    expect(fetchCount).toBe(1);
+
+    // 2. Wait 3.2 seconds for token to expire
+    await new Promise((resolve) => setTimeout(resolve, 3200));
+
+    // 3. Second call automatically renews because cached token has expired
+    const secondAnalytics = await client.analytics.summary();
+    expect(secondAnalytics.tenant_id).toBe(TEST_MERCHANT_ID);
+    expect(fetchCount).toBeGreaterThanOrEqual(2);
+
+    // 4. Test forced renewal on 401: mock tokenProvider returning invalid token first, then valid
+    let attempt = 0;
+    const simulated401Provider = async (ctx?: { forceRefresh?: boolean }) => {
+      attempt++;
+      if (attempt === 1 && !ctx?.forceRefresh) {
+        // Return an already-expired token
+        return "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0aWQiOiJtZXJjaF9jb250cmFjdF9lMmUiLCJzdWIiOiJ4Iiwic2NwIjpbInJlYWQiXSwiYXVkIjoicmV0dXJuZ3VhcmQtc2RrIiwiaWF0IjoxNTAwMDAwMDAwLCJleHAiOjE1MDAwMDAwMTB9.invalidsig";
+      }
+      return fetchShortTtlToken();
+    };
+
+    const client401 = new ReturnGuardClient({
+      baseUrl: BASE_URL,
+      tokenProvider: simulated401Provider,
+    });
+
+    // The first attempt hits 401, client re-requests tokenProvider with forceRefresh, and succeeds
+    const resAfter401 = await client401.analytics.summary();
+    expect(resAfter401.tenant_id).toBe(TEST_MERCHANT_ID);
+    expect(attempt).toBe(2);
+  }, 15000);
+
 });
