@@ -188,3 +188,15 @@ class TenantScopedRepository:
         self.db.commit()
         self.db.refresh(new_event)
         return new_event
+
+    def get_payment_events_for_order(self, order_id: str) -> List[PaymentEvent]:
+        """Fetch all payment/relay events linked to an order reference within this merchant's scope."""
+        return (
+            self.db.query(PaymentEvent)
+            .filter(
+                PaymentEvent.merchant_id == self.merchant_id,
+                PaymentEvent.order_reference == order_id,
+            )
+            .order_by(PaymentEvent.received_at.asc())
+            .all()
+        )

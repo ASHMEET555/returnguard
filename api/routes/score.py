@@ -244,3 +244,98 @@ def get_decision_by_id(
         shadow=bool(audit_row.shadow),
         decision_id=audit_row.decision_id,
     )
+
+
+
+@router.get(
+    "/v1/decisions/{decision_id}/audit",
+    status_code=status.HTTP_200_OK,
+    summary="Reconstruct full audit trail and evidence for a risk decision",
+)
+def get_decision_audit_reconstruction(
+    decision_id: str,
+    auth_merchant_id: str = Depends(get_api_key_merchant),
+    db: Session = Depends(get_db),
+):
+    """
+    Reconstructs the full audit record, policy trace, SHAP top-K, rule hits,
+    feature snapshot, and linked relay events for the authenticated merchant.
+
+    Strictly read-only; writes zero database rows.
+    Returns HTTP 404 if the decision is not found or belongs to another merchant.
+    """
+    repo = TenantScopedRepository(db, auth_merchant_id)
+    audit_row = repo.get_decision(decision_id)
+
+    if not audit_row:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Decision not found for authenticated merchant",
+        )
+
+    raw_reasons = []
+    if audit_row.reason_codes_json:
+        try:
+            raw_reasons = json.loads(audit_row.reason_codes_json)
+        except Exception:
+            raw_reasons = []
+
+    rule_hits = []
+    if audit_row.rule_hits_json:
+        try:
+            rule_hits = json.loads(audit_row.rule_hits_json)
+        except Exception:
+            rule_hits = []
+
+    feature_snapshot = {}
+    if audit_row.feature_snapshot_json:
+        try:
+            feature_snapshot = json.loads(audit_row.feature_snapshot_json)
+        except Exception:
+            feature_snapshot = {}
+
+    relay_events_rows = repo.get_payment_events_for_order(audit_row.order_id)
+    relay_events = [
+        {
+            "event_id": e.event_id,
+            "event_type": e.event_type,
+            "status": e.status,
+            "summary": e.summary,
+            "received_at": e.received_at.isoformat() if e.received_at else None,
+        }
+        for e in relay_events_rows
+    ]
+
+    return {
+        "status": "success",
+        "data": {
+            "decision": {
+                "decision_id": audit_row.decision_id,
+                "order_id": audit_row.order_id,
+                "merchant_id": audit_row.merchant_id,
+                "channel": audit_row.channel,
+                "risk_score": float(audit_row.risk_score),
+                "tier": audit_row.tier,
+                "model_version": audit_row.model_version,
+                "model_status": audit_row.model_status,
+                "threshold": float(audit_row.threshold) if audit_row.threshold is not None else 0.40,
+                "feature_completeness": float(audit_row.feature_completeness) if audit_row.feature_completeness is not None else 1.0,
+                "explanation_status": audit_row.explanation_status,
+                "shadow": bool(audit_row.shadow),
+                "created_at": audit_row.created_at.isoformat() if audit_row.created_at else None,
+            },
+            "policy_trace": {
+                "policy_rule": audit_row.policy_rule,
+                "policy_action": audit_row.policy_action,
+                "suggested_action": audit_row.suggested_action,
+                "severity": audit_row.severity,
+                "tier": audit_row.tier,
+                "threshold": float(audit_row.threshold) if audit_row.threshold is not None else 0.40,
+                "rule_hits": rule_hits,
+            },
+            "shap_top_k": raw_reasons,
+            "rule_hits": rule_hits,
+            "feature_snapshot": feature_snapshot,
+            "relay_events": relay_events,
+        },
+    }
