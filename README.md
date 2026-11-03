@@ -1,85 +1,132 @@
-# ReturnGuard — Build Pack (PayPal + AI Hackathon edition)
+# ReturnGuard
 
-AI-powered return-abuse and fraud risk detection with dispute evidence generation for e-commerce merchants, featuring a real PayPal sandbox payment path and an AG Grid investigation console.
+**AI-powered payment-risk platform for merchants.** ReturnGuard scores card-not-present payment transactions for fraud risk, applies a transparent five-rule policy, explains each recommendation with SHAP, and keeps an audit trail. Merchants call it from their servers and can embed its risk components in their admin applications.
 
-Hackathon: **Build What's Next with PayPal and AI**. The one hard rule: the project must meaningfully use PayPal **and** AI.
+ReturnGuard recommends. The merchant executes. It never moves money, cancels orders, or files disputes on its own.
 
-Build **in order**. Do not skip Phase C. Held-out metrics are the bar, and no sponsor work starts before they are green.
+**ShopPoint** (`/ShopPoint`) is the reference merchant integration. It is a demonstration application, not the ReturnGuard product.
 
-## Docs
+Hackathon: Build What's Next with PayPal and AI.
 
-| File | When to open |
-|------|--------------|
-| [01-brief.md](01-brief.md) | Before coding: Track bar, hackathon rules, product locks, plan-review decisions, DoD |
-| [02-architecture.md](02-architecture.md) | While implementing: modules, PayPal flows, features, data, eval |
-| [03-phases.md](03-phases.md) | Day to day: Phase A→H checklists and exit criteria |
-| [docs/data_mapping.md](docs/data_mapping.md) | PayPal Orders v2 to transaction schema mapping |
-| [docs/decisions.md](docs/decisions.md) | Formal architecture, evaluation, and policy decisions |
-| README.md | Overview and index |
+## Status
 
-## Architecture & Design Highlights
+| Area | Status |
+|---|---|
+| Risk scoring API, ML layer, policy, SHAP, shadow mode, audit | Working |
+| ShopPoint PayPal authorize, capture gate, merchant review | Working in mocked tests; live sandbox run pending |
+| ShopPoint PayPal webhook | Working; **signature verification pending** |
+| Authentication and multi-tenancy | Not yet built (Phase E). `/v1/score` is currently unauthenticated |
+| SDK and React components | Planned (Phases F and G) |
+| Evidence Engine | Planned (Phase I) |
 
-- **PayPal Payment Integration**: Full Orders API v2 integration (authorize/capture, webhook listener).
-- **PayPal Disputes API Path**: Automated evidence pack compilation gated behind human review and sandbox-only submission.
-- **AG Grid Investigation Console**: High-performance merchant operations console for dispute triage and transaction audit.
-- **Explainable AI**: SHAP-powered local feature attributions and transparent decision policies with human-in-the-loop oversight.
-- **Verified Cost Model**: Evaluation based on asymmetric misclassification costs: False Positive = ₹50, False Negative = 50% of transaction amount.
+See [docs/plan/03-phases.md](docs/plan/03-phases.md) for the full checklist.
 
-## Build order
+## Quick start
 
+Prerequisites: Python 3.13, Node.js (for ShopPoint), MongoDB, an ngrok account for webhooks.
+
+```bash
+# ReturnGuard
+cd returnguard
+python -m venv .venv && .venv\Scripts\activate   # Windows
+pip install -r requirements.txt
+uvicorn api.main:app --reload                    # http://127.0.0.1:8000
+
+# Tests
+pytest
 ```
-A spec + data  →  B rules, rings, features  →  C ML + holdout + score API (BAR)
-  →  D PayPal payment path  →  E policy, shadow, audit
-  →  F AG Grid console  →  G evidence verifier + LLM + gated dispute submit
-  →  H submission package + demo
+
+```bash
+# ShopPoint
+cd ShopPoint
+npm install
+npm run start:dev                  # backend http://127.0.0.1:5000
+cd client && npm install && npm start   # frontend http://localhost:3000
+node --test tests/d1_payment.test.js tests/d2_capture_gate.test.js tests/d3_webhooks.test.js
 ```
 
-## Stack (locked)
+Copy `config/config.env.example` to `config/config.env` in ShopPoint and fill in the PayPal sandbox values. Never commit that file.
 
-- **Backend**: Python 3.13, FastAPI, PostgreSQL (primary) & SQLite (local test harness), SQLAlchemy
-- **Machine Learning**: LightGBM (primary candidate), scikit-learn (logistic regression baseline & random forest), SHAP (TreeExplainer)
-- **Payments**: PayPal REST APIs in **sandbox** (Orders v2, Webhooks, Disputes)
-- **Frontend**: Next.js + React, AG Grid Community
-- **LLM**: Gemini or OpenAI API, used strictly for evidence narrative drafting and explanation, never deciding risk.
+## Environment variables
+
+| Variable | Where | Purpose |
+|---|---|---|
+| `DATABASE_URL` | ReturnGuard | SQLAlchemy URL. Defaults to SQLite |
+| `SHADOW_MODE` | ReturnGuard and ShopPoint | `true` (default) records decisions without enforcing |
+| `PAYPAL_CLIENT_ID` | ShopPoint | PayPal sandbox client ID |
+| `PAYPAL_CLIENT_SECRET` | ShopPoint | PayPal sandbox secret. Never in ReturnGuard |
+| `PAYPAL_WEBHOOK_ID` | ShopPoint | Sandbox webhook ID for signature verification |
+| `PAYPAL_ENV` | ShopPoint | `sandbox` |
+| `RETURNGUARD_BASE_URL` | ShopPoint | ReturnGuard API base URL |
+
+ReturnGuard's own `.env.example` still lists PayPal credentials. They are scheduled for removal in Phase E.
+
+## Model results
+
+All figures are on held-out test data. Operating thresholds were chosen on validation data only. Costs use the project's cost model: ₹50 per false positive, 50% of the amount per false negative.
+
+**Synthetic (days 50–59, 35,949 transactions, 719 fraud):** LightGBM, threshold 0.40.
+
+| Metric | Value |
+|---|---|
+| Precision | 0.7847 |
+| Recall | 0.8818 (634 of 719) |
+| F1 | 0.8304 |
+| PR-AUC | 0.9009 |
+| ROC-AUC | 0.9684 |
+| Expected cost | ₹41,376.78 (amount heuristic: ₹171,069) |
+
+Split: chronological. Train days 0–39, validation 40–49, test 50–59. Reproduced on the frozen artifact in this repository.
+
+**IEEE-CIS (external, test days 140–182, 118,108 transactions):** reported, not reproduced in this repository. The Phase 17 artifact and its predictions are absent.
+
+| Model | Precision | Recall | ROC-AUC | Cost units |
+|---|---|---|---|---|
+| Phase 17 (τ = 0.35) | 6.31% | 79.80% | 0.7712 | 2,469,531 |
+| Candidate v2 (τ = 0.30), not approved for serving | 6.70% | 77.46% | 0.7728 | 2,263,053 |
+
+IEEE currency is not stated in the dataset; its cost figures are in units, not ₹.
+
+### Honest limits
+
+- **IEEE precision is low.** About one true chargeback for every 15 flagged transactions. The IEEE model is a high-recall filter for step-up review, not a blocker. ReturnGuard never auto-declines on it.
+- **Public data lacks device and login telemetry.** Production precision depends on merchant signals that this build does not have.
+- **Synthetic metrics are not production metrics.** They measure the model on the generator's distribution.
+- **One earlier figure is unreconciled.** A table lists synthetic ROC-AUC as 0.984. The reproduced value is 0.9684. The 0.984 figure is not used.
+
+## Architecture
+
+Merchant server ──(API key)──► ReturnGuard API ──► features → LightGBM → policy → SHAP → audit
+│ (recommendation only)
+│
+ShopPoint backend ──► PayPal (authorize, capture, void, webhooks)
+│ ▲
+└─ decision ──────┘ capture only after the decision check
+
+
+Details: [docs/plan/02-architecture.md](docs/plan/02-architecture.md).
 
 ## Defense pledge
 
-- Risk detection is shadow-first. Soft actions only: allow, log, step-up verification, manual review.
-- Never auto-cancel, void or reject a payment or order. The policy action `BLOCK` routes cases to prioritized human investigation.
-- Dispute evidence is generated by the AI and reviewed by a human. Submission to PayPal happens only after an explicit human approve, and only in sandbox for this build.
-- Payment capture and evidence submission are separate operations. Every action writes an audit row (`audit_score_events`).
-- No offense-capable tooling. No automated dispute filing. No scraping of other merchants.
+- Shadow mode is the default. Enforcement is an explicit merchant setting.
+- Never auto-cancel, void, decline, refund or file a dispute. `BLOCK` routes a case to human review.
+- ReturnGuard never holds PayPal credentials and never calls PayPal.
+- Every decision and merchant action writes an audit row.
+- Evidence packs are drafted from stored records, reviewed by a human, and submitted by the merchant.
+- No offense-capable tooling. No scraping of other merchants.
 
+## Documentation
 
-## Model Performance & Held-Out Metrics (Phase C Results)
+| File | Contents |
+|---|---|
+| [docs/plan/01-brief.md](docs/plan/01-brief.md) | Product scope, locks, open decisions, Definition of Done |
+| [docs/plan/02-architecture.md](docs/plan/02-architecture.md) | Components, flows, ownership, tenancy and auth design |
+| [docs/plan/03-phases.md](docs/plan/03-phases.md) | Phase checklists and exit criteria |
+| [docs/api/ml_contract.md](docs/api/ml_contract.md) | Score request and response contract |
+| [docs/data_mapping.md](docs/data_mapping.md) | PayPal order to transaction mapping |
+| [docs/decisions.md](docs/decisions.md) | Recorded decisions |
+| [reports/holdout_metrics.md](reports/holdout_metrics.md) | Full holdout report |
 
-All figures evaluated in a locked single pass on held-out test splits. Operating thresholds were chosen exclusively on validation splits. Cost parameters: $\text{FP} = ₹50$, $\text{FN} = 0.50 \times \text{amount}$.
+## License
 
-### 1. Synthetic Dataset (Days 50–59 Test Split, $N = 35,949$)
-- **Split Method**: Chronological split across 60 days of synthetic merchant traffic (Days 0–39 Train, Days 40–49 Val, Days 50–59 Test).
-- **Operating Model**: `candidate_lgbm_v1.pkl` at locked threshold **$\tau = 0.40$**.
-- **Metrics**:
-  - **Precision**: **78.47%**
-  - **Recall**: **88.18%** (634 of 719 fraud events caught)
-  - **F1-Score**: **0.8304**
-  - **PR-AUC**: **0.9009** | **ROC-AUC**: **0.9684**
-  - **Expected Financial Cost**: **₹41,376.78** (vs ₹171,069 for amount heuristic; $75.8\%$ cost reduction).
-
-### 2. IEEE-CIS Real-World Dataset (Days 140–182 Test Split, $N = 118,108$)
-- **Split Method**: Chronological TransactionDT partition ($<9.61\text{M}$ Train, $9.61\text{M}$–$12.19\text{M}$ Val, $\ge 12.19\text{M}$ Test).
-- **Phase 17 Baseline Model**: `phase17_lgbm.pkl` at locked threshold **$\tau = 0.35$**.
-  - **Precision**: **6.31%**
-  - **Recall**: **79.80%** (3,243 of 4,064 fraud chargebacks caught)
-  - **F1-Score**: **0.1170** | **ROC-AUC**: **0.7712** | **PR-AUC**: **0.1283**
-  - **Expected Cost Units**: **2,469,531** (FP: 48,139 events; FN: 821 events).
-- **LightGBM v2 Candidate (Review File)**: `lgbm_ieee_v2.pkl` at locked threshold **$\tau = 0.30$**.
-  - **Precision**: **6.70%** ($+0.39\%$ lift)
-  - **Recall**: **77.46%**
-  - **F1-Score**: **0.1234** | **ROC-AUC**: **0.7728** | **PR-AUC**: **0.1291**
-  - **False Positives**: **43,821** (-4,318 false alarms)
-  - **Expected Cost Units**: **2,263,053** (-206,478 cost units saved).
-
-> [!WARNING]
-> **Honest Operational Limits on IEEE Precision (6.7%)**:  
-> Without proprietary merchant telemetry (device fingerprinting and login history are absent in public datasets), external chargeback precision reaches **6.3%–6.7%**. Consequently, roughly 15 out of 16 flagged transactions are false positives.  
-> ReturnGuard never automatically cancels orders based on this score. The policy action `BLOCK` is strictly an advisory tag that routes transactions to prioritized manual review queues.
+See LICENSE.
