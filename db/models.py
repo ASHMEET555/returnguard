@@ -4,6 +4,7 @@ import datetime
 
 from sqlalchemy import (
     JSON,
+    Boolean,
     Column,
     DateTime,
     ForeignKey,
@@ -34,6 +35,7 @@ class Merchant(Base):
 
     customers = relationship("Customer", back_populates="merchant")
     orders = relationship("Order", back_populates="merchant")
+    api_keys = relationship("APIKey", back_populates="merchant")
 
 
 class Customer(Base):
@@ -139,6 +141,7 @@ class Payment(Base):
 
     id = Column(String(64), primary_key=True)
     order_id = Column(String(64), ForeignKey("orders.id"), nullable=False)
+    merchant_id = Column(String(64), ForeignKey("merchants.id"), nullable=True, index=True)
     channel = Column(String(32), nullable=False)
     amount = Column(Numeric(12, 2), nullable=False)
     currency = Column(String(3), default="INR", nullable=False)
@@ -164,6 +167,7 @@ class Shipment(Base):
 
     id = Column(String(64), primary_key=True)
     order_id = Column(String(64), ForeignKey("orders.id"), nullable=False)
+    merchant_id = Column(String(64), ForeignKey("merchants.id"), nullable=True, index=True)
     carrier = Column(String(64), nullable=False)
     tracking_number = Column(String(128), nullable=False, index=True)
     status = Column(
@@ -188,6 +192,7 @@ class ReturnEvent(Base):
 
     id = Column(String(64), primary_key=True)
     order_id = Column(String(64), ForeignKey("orders.id"), nullable=False)
+    merchant_id = Column(String(64), ForeignKey("merchants.id"), nullable=True, index=True)
     reason = Column(String(128), nullable=False)
     status = Column(String(32), nullable=False)  # 'requested', 'received', 'inspected'
     received_at = Column(DateTime(timezone=True), nullable=True)
@@ -327,6 +332,29 @@ class MerchantAudit(Base):
     merchant = relationship("Merchant")
 
 
+class APIKey(Base):
+    """API key for merchant authentication."""
+
+    __tablename__ = "api_keys"
+
+    id = Column(String(64), primary_key=True)
+    merchant_id = Column(
+        String(64), ForeignKey("merchants.id"), nullable=False, index=True
+    )
+    key_prefix = Column(String(32), nullable=False, index=True)
+    key_hash = Column(String(64), nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.UTC),
+        nullable=False,
+    )
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
+
+    merchant = relationship("Merchant", back_populates="api_keys")
+
+
 class AuditScoreEvent(Base):
     """Immutable record of online risk scores and soft policy decisions."""
 
@@ -335,6 +363,7 @@ class AuditScoreEvent(Base):
     id = Column(String(64), primary_key=True)
     decision_id = Column(String(64), nullable=True, index=True)
     order_id = Column(String(64), ForeignKey("orders.id"), nullable=False)
+    merchant_id = Column(String(64), ForeignKey("merchants.id"), nullable=True, index=True)
     channel = Column(String(32), default="paypal", nullable=False)
     risk_score = Column(Numeric(6, 4), nullable=False)
     tier = Column(String(32), default="LOW", nullable=False)

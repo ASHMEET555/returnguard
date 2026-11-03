@@ -19,7 +19,41 @@ from services.score import ScoringService
 
 @pytest.fixture
 def client():
-    return TestClient(app)
+    import datetime
+    import hashlib
+    import secrets
+    import uuid
+    from db.migrations import run_migrations
+    from db.models import APIKey, Merchant
+    from db.session import SessionLocal, engine
+
+    run_migrations(engine)
+    db = SessionLocal()
+    merchant_id = "merch_score_v1_test"
+    m = db.query(Merchant).filter_by(id=merchant_id).first()
+    if not m:
+        m = Merchant(id=merchant_id, name="Score V1 Test", email="v1@test.com")
+        db.add(m)
+        db.flush()
+
+    plain_key = f"rg_test_{secrets.token_urlsafe(32)}"
+    key_hash = hashlib.sha256(plain_key.encode("utf-8")).hexdigest()
+    api_key = APIKey(
+        id=f"key_{uuid.uuid4().hex[:16]}",
+        merchant_id=merchant_id,
+        key_prefix="rg_test_",
+        key_hash=key_hash,
+        name="V1 Test Key",
+        is_active=True,
+        created_at=datetime.datetime.now(datetime.UTC),
+    )
+    db.add(api_key)
+    db.commit()
+    db.close()
+
+    c = TestClient(app)
+    c.headers["Authorization"] = f"Bearer {plain_key}"
+    return c
 
 
 def test_shadow_mode_default():

@@ -32,6 +32,7 @@ def run_migrations(target_engine=None):
                 ("feature_completeness", "NUMERIC(5, 4) DEFAULT 1.0"),
                 ("explanation_status", "VARCHAR(32) DEFAULT 'available'"),
                 ("feature_snapshot_json", "TEXT"),
+                ("merchant_id", "VARCHAR(64)"),
             ]
 
             for col_name, col_type in needed_cols:
