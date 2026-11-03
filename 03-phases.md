@@ -80,14 +80,14 @@ Exit: pending the items above. Do not claim Phase D complete until the D3 signat
 
 Exit: 373 passing tests; multi-tenant isolation, relay ingestion, per-key rate limiting, audit reconstruction verified; zero PayPal credentials in ReturnGuard.
 
-## Phase F — `@returnguard/sdk` [TODO]
+## Phase F — @returnguard/sdk [DONE]
 
-- [ ] Typed client: `scoreTransaction`, decisions list and detail, explanation, reviews (list and submit), analytics, model performance
-- [ ] `tokenProvider` callback; no token storage in the SDK
-- [ ] Cursor pagination; typed errors (401, 403, 404, 429, network)
-- [ ] Retry for reads only, one attempt
-- [ ] ES2017 build; no React import; no secrets in bundle (CI grep)
-- [ ] Contract tests against the running API; token-expiry renewal test
+- [x] Typed client: `scoreTransaction`, decisions list and detail, explanation, reviews (list and submit), analytics, model performance
+- [x] `tokenProvider` callback; no token storage in the SDK
+- [x] Cursor pagination; typed errors (401, 403, 404, 429, network)
+- [x] Retry for reads only, one attempt
+- [x] ES2017 build; no React import; no secrets in bundle (CI grep)
+- [x] Contract tests against the running API; token-expiry renewal test
 
 Exit: contract tests pass against the running API; bundle grep clean.
 
