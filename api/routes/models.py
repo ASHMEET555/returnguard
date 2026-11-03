@@ -59,7 +59,7 @@ def get_model_performance(
         ieee_cis=ModelDatasetMetrics(
             dataset_name="ieee_cis",
             auc_roc=0.7712,
-            auc_pr=0.8856,
+            auc_pr=0.5186,
             precision=0.0631,
             recall=0.7980,
             f1_score=0.1171,
