@@ -134,3 +134,20 @@ Authorization: Bearer <api_key>
    - If `merchant_id` differs from the key's merchant: the request is rejected with `400 Bad Request` to prevent cross-tenant spoofing.
 3. **Audit Trail**: Every scored transaction persists an immutable record to `audit_score_events` stamped with the authenticated `merchant_id`. No plain keys or hashes are ever logged or stored in audit records.
 4. **Authentication Errors**: Missing, malformed, unknown, or revoked API keys return `401 Unauthorized` with a generic error detail (`"Invalid or missing authentication credentials"`), avoiding account enumeration.
+
+
+---
+
+## 6. Phase E-2 Multi-Tenant Isolation Guarantees & Limits
+
+### Guarantees
+1. **Compound Key Scoping**: Customer entities and prior transaction histories are partitioned by `(merchant_id, customer_id)`. Identical customer IDs repeating across different merchants (e.g., `cust_1`) share zero features, velocity counters, or behavioral memory.
+2. **Prior Transaction Integrity**: Any entry in `prior_transactions` with an explicit `merchant_id` differing from the caller's authenticated key causes an immediate `400 Bad Request` rejection.
+3. **Database Scoping**: All merchant-data tables (`addresses`, `devices`, `orders`, `payments`, `payment_events`, `disputes`, `evidence_packs`, `evidence_submissions`, `merchant_audits`, `audit_score_events`) contain indexed `merchant_id` columns.
+4. **Repository Access Guard**: Queries through `TenantScopedRepository` mandate `merchant_id`. Unscoped queries are forbidden.
+5. **Lookup Privacy (404 Not 403)**: `GET /v1/decisions/{decision_id}` returns `404 Not Found` when a valid decision ID belonging to another merchant is requested, eliminating ID enumeration.
+
+### Operational Limits
+1. **Shared Frozen Model**: The LightGBM model artifact (`candidate_lgbm_v1.pkl`), TreeSHAP explainer, and decision thresholds ($	au = 0.40$) are globally shared and immutable across tenants. Tenant transactions are evaluated read-only and never alter the global model weights.
+2. **Webhook Endpoint**: `POST /v1/paypal/webhooks` operates under PayPal cryptographic webhook signature verification and is not yet mapped to individual tenant API keys.
+3. **Browser Tokens**: Browser embed tokens (PyJWT / HS256) and multi-origin CORS verification remain deferred to Phase E-3/F.
