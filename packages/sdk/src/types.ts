@@ -130,6 +130,7 @@ export interface ModelPerformance {
   synthetic: ModelDatasetMetrics;
   ieee_cis: ModelDatasetMetrics;
   active_dataset: string;
+  honest_limits_note: string;
 }
 
 export interface AuditReconstructionData {

@@ -1,6 +1,6 @@
 """Model performance reporting endpoint (Phase F)."""
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel
@@ -26,6 +26,7 @@ class ModelPerformanceResponse(BaseModel):
     synthetic: ModelDatasetMetrics
     ieee_cis: ModelDatasetMetrics
     active_dataset: str
+    honest_limits_note: str
 
 
 @router.get(
@@ -39,29 +40,36 @@ def get_model_performance(
 ) -> ModelPerformanceResponse:
     """
     Returns frozen evaluation metrics for the active LightGBM candidate model,
-    reporting synthetic validation metrics and IEEE-CIS benchmark metrics separately.
+    reporting synthetic validation metrics and IEEE-CIS benchmark metrics separately,
+    including the honest-limits interpretation.
     """
     return ModelPerformanceResponse(
         model_version="candidate_lgbm_v1",
         active_dataset="synthetic",
         synthetic=ModelDatasetMetrics(
             dataset_name="synthetic",
-            auc_roc=0.9842,
-            auc_pr=0.9781,
-            precision=0.9412,
-            recall=0.9231,
-            f1_score=0.9320,
+            auc_roc=0.9684,
+            auc_pr=0.9009,
+            precision=0.7847,
+            recall=0.8818,
+            f1_score=0.8304,
             threshold=0.40,
             sample_count=10000,
         ),
         ieee_cis=ModelDatasetMetrics(
             dataset_name="ieee_cis",
-            auc_roc=0.9124,
+            auc_roc=0.7712,
             auc_pr=0.8856,
-            precision=0.8745,
-            recall=0.8520,
-            f1_score=0.8631,
-            threshold=0.40,
+            precision=0.0631,
+            recall=0.7980,
+            f1_score=0.1171,
+            threshold=0.35,
             sample_count=590540,
+        ),
+        honest_limits_note=(
+            "The IEEE-CIS model is a high-recall filter for step-up review. "
+            "Its precision is low (~6.31%, about one true fraud per 15 flags). "
+            "It must not be presented as a precise blocker. Synthetic model achieves "
+            "0.9684 ROC-AUC and 0.7847 precision on frozen test days 50-59."
         ),
     )
