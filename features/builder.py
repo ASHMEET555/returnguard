@@ -40,9 +40,11 @@ def _normalize_dt(val: Any) -> pd.Timestamp:
 class FeatureBuilder:
     """Builds point-in-time features strictly as-of an evaluation timestamp."""
 
-    def __init__(self, db_session: Any = None, merchant_id: Optional[str] = None):
+    def __init__(self, merchant_id: str, db_session: Any = None):
+        if not merchant_id or not str(merchant_id).strip():
+            raise ValueError("merchant_id is required and cannot be empty")
+        self.merchant_id = str(merchant_id).strip()
         self.session = db_session
-        self.merchant_id = merchant_id
 
     def build(
         self,
@@ -201,13 +203,26 @@ def build(
     order_record: Optional[Dict[str, Any]] = None,
     prior_records: Optional[List[Dict[str, Any]]] = None,
     db_session: Any = None,
+    merchant_id: Optional[str] = None,
 ) -> FeatureResult:
     """Convenience function returning the 15-feature result and writing snapshot."""
-    builder = FeatureBuilder(db_session=db_session)
+    actual_merchant_id = merchant_id or (order_record.get("merchant_id") if order_record else None)
+    if not actual_merchant_id and db_session is not None:
+        try:
+            ord_obj = db_session.query(Order).filter(Order.id == order_id).first()
+            if ord_obj:
+                actual_merchant_id = ord_obj.merchant_id
+        except Exception:
+            pass
+    if not actual_merchant_id:
+        actual_merchant_id = "merch_default"
+
+    builder = FeatureBuilder(merchant_id=actual_merchant_id, db_session=db_session)
     return builder.build(
         order_id=order_id,
         as_of=as_of,
         order_record=order_record,
         prior_records=prior_records,
         db_session=db_session,
+        merchant_id=actual_merchant_id,
     )
