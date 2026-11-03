@@ -40,8 +40,9 @@ def _normalize_dt(val: Any) -> pd.Timestamp:
 class FeatureBuilder:
     """Builds point-in-time features strictly as-of an evaluation timestamp."""
 
-    def __init__(self, db_session: Any = None):
+    def __init__(self, db_session: Any = None, merchant_id: Optional[str] = None):
         self.session = db_session
+        self.merchant_id = merchant_id
 
     def build(
         self,
@@ -50,6 +51,7 @@ class FeatureBuilder:
         order_record: Optional[Dict[str, Any]] = None,
         prior_records: Optional[List[Dict[str, Any]]] = None,
         db_session: Any = None,
+        merchant_id: Optional[str] = None,
     ) -> FeatureResult:
         """
         Builds the 15-feature vector strictly as-of `as_of` and serializes
@@ -74,6 +76,7 @@ class FeatureBuilder:
             Dataclass containing feature vector and canonical snapshot JSON.
         """
         session = db_session or self.session
+        scoped_mid = merchant_id or self.merchant_id
 
         # 1. Resolve cutoff timestamp
         if as_of is None:
@@ -112,7 +115,10 @@ class FeatureBuilder:
             feature_row = match[FEATURE_COLUMNS].iloc[0]
         elif session is not None:
             # Query from DB if available
-            order_obj = session.query(Order).filter(Order.id == order_id).first()
+            order_query = session.query(Order).filter(Order.id == order_id)
+            if scoped_mid:
+                order_query = order_query.filter(Order.merchant_id == scoped_mid)
+            order_obj = order_query.first()
             if not order_obj:
                 raise ValueError(f"Order {order_id} not found in database")
             # Build minimal frame from Order
@@ -164,11 +170,10 @@ class FeatureBuilder:
 
         # 4. Write to audit schema if session is provided
         if session is not None:
-            audit_record = (
-                session.query(AuditScoreEvent)
-                .filter(AuditScoreEvent.order_id == order_id)
-                .first()
-            )
+            audit_query = session.query(AuditScoreEvent).filter(AuditScoreEvent.order_id == order_id)
+            if scoped_mid:
+                audit_query = audit_query.filter(AuditScoreEvent.merchant_id == scoped_mid)
+            audit_record = audit_query.first()
             if audit_record:
                 audit_record.feature_snapshot_json = feature_snapshot_json
             else:
