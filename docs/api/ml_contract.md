@@ -108,3 +108,29 @@ Below is the complete score response contract as specified in `02-architecture.m
 
 1. **Existing Clients**: Existing response fields (`transaction_id`, `fraud_probability`, `risk_score`, `risk_category`, `action`, `policy_rule_id`, `policy_reason`, `reasons`) remain unchanged in type and location.
 2. **Additive Safety**: All new fields (`severity`, `suggested_action`, `rule_hits`, `ring_id`, `feature_completeness`, `shadow`) are purely additive extensions. No existing client response field is deprecated or mutated.
+
+
+---
+
+## 5. Authentication & Merchant Tenancy (`POST /v1/score`)
+
+### Required Authorization Header
+`POST /v1/score` and `POST /score` require Bearer API key authentication:
+```http
+Authorization: Bearer <api_key>
+```
+
+- **Key Format**: Prefix (`rg_live_` or `rg_test_`) followed by 32+ cryptographically random URL-safe bytes (e.g. `rg_live_WXk1LwpgE18Xcm_flep6YPKiBNvOWLIgykb2QAAXnhQ`).
+- **Generation & Revocation**: Managed via `scripts/create_api_key.py`:
+  - Create: `python scripts/create_api_key.py --merchant-id <merchant_id> --name "Label"`
+  - Revoke: `python scripts/create_api_key.py --revoke <key_id>`
+- **Storage**: Only the SHA-256 hash is persisted in the `api_keys` table. The plain key is shown once upon generation and never stored or logged.
+
+### Tenancy and Merchant Identity Rules
+1. **Source of Truth**: The merchant identity is determined strictly by the authenticated API key, not by client-controlled request fields.
+2. **Body `merchant_id` Validation**:
+   - If `merchant_id` is omitted from the request body: evaluation succeeds (`200 OK`) and is attributed to the authenticated merchant.
+   - If `merchant_id` matches the key's merchant: evaluation succeeds (`200 OK`).
+   - If `merchant_id` differs from the key's merchant: the request is rejected with `400 Bad Request` to prevent cross-tenant spoofing.
+3. **Audit Trail**: Every scored transaction persists an immutable record to `audit_score_events` stamped with the authenticated `merchant_id`. No plain keys or hashes are ever logged or stored in audit records.
+4. **Authentication Errors**: Missing, malformed, unknown, or revoked API keys return `401 Unauthorized` with a generic error detail (`"Invalid or missing authentication credentials"`), avoiding account enumeration.
