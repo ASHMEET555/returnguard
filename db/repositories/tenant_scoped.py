@@ -8,7 +8,9 @@ Enforces:
 """
 
 import datetime
+import json
 from typing import Any, Dict, List, Optional
+import uuid
 from sqlalchemy.orm import Session
 
 from db.models import (
@@ -143,3 +145,46 @@ class TenantScopedRepository:
         self.db.add(audit_event)
         self.db.commit()
         return audit_event
+
+    # --- Payment Events & Webhook Relays ---
+
+    def get_payment_event(self, event_id: str) -> Optional[PaymentEvent]:
+        """Fetch payment event strictly within this merchant's scope."""
+        return (
+            self.db.query(PaymentEvent)
+            .filter(
+                PaymentEvent.merchant_id == self.merchant_id,
+                PaymentEvent.event_id == event_id,
+            )
+            .first()
+        )
+
+    def record_payment_event(
+        self,
+        event_id: str,
+        event_type: str,
+        order_reference: Optional[str] = None,
+        summary: Optional[str] = None,
+        resource_type: Optional[str] = None,
+        payload: Optional[Dict[str, Any]] = None,
+        status: str = "processed",
+    ) -> PaymentEvent:
+        """Record payment event strictly scoped to this merchant."""
+        event_kwargs = {
+            "id": str(uuid.uuid4()),
+            "merchant_id": self.merchant_id,
+            "event_id": event_id,
+            "event_type": event_type,
+            "summary": summary,
+            "resource_type": resource_type,
+            "payload_json": json.dumps(payload or {}),
+            "status": status,
+        }
+        if hasattr(PaymentEvent, "order_reference") and order_reference is not None:
+            event_kwargs["order_reference"] = order_reference
+
+        new_event = PaymentEvent(**event_kwargs)
+        self.db.add(new_event)
+        self.db.commit()
+        self.db.refresh(new_event)
+        return new_event

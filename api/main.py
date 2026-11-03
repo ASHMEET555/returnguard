@@ -2,7 +2,7 @@
 
 from fastapi import FastAPI
 
-from api.routes import assistant, disputes, payments, score, webhooks
+from api.routes import assistant, disputes, events, payments, score, webhooks
 
 app = FastAPI(
     title="ReturnGuard API",
@@ -12,6 +12,7 @@ app = FastAPI(
 
 # Wire empty routers
 app.include_router(score.router)
+app.include_router(events.router)
 app.include_router(payments.router)
 app.include_router(webhooks.router)
 app.include_router(disputes.router)
