@@ -123,6 +123,7 @@ export interface ModelDatasetMetrics {
   f1_score: number;
   threshold: number;
   sample_count: number;
+  reproduction_status: "REPRODUCED" | "REPORTED_UNVERIFIED";
 }
 
 export interface ModelPerformance {

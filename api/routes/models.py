@@ -19,6 +19,7 @@ class ModelDatasetMetrics(BaseModel):
     f1_score: float
     threshold: float
     sample_count: int
+    reproduction_status: str
 
 
 class ModelPerformanceResponse(BaseModel):
@@ -55,6 +56,7 @@ def get_model_performance(
             f1_score=0.8304,
             threshold=0.40,
             sample_count=10000,
+            reproduction_status="REPRODUCED",
         ),
         ieee_cis=ModelDatasetMetrics(
             dataset_name="ieee_cis",
@@ -65,6 +67,7 @@ def get_model_performance(
             f1_score=0.1171,
             threshold=0.35,
             sample_count=590540,
+            reproduction_status="REPORTED_UNVERIFIED",
         ),
         honest_limits_note=(
             "The IEEE-CIS model is a high-recall filter for step-up review. "
