@@ -19,7 +19,7 @@ Phase D1 has successfully implemented the server-side PayPal authorization flow 
 
 | Exit Criterion | Status | Evidence Path | Notes |
 |---|---|---|---|
-| Buyer can approve a PayPal Sandbox payment | **UNVERIFIED (Requires Sandbox Account)** | `tests/d1_payment.test.js:147` | SDK script updated with `intent=authorize`. Live interactive buyer approval requires `PAYPAL_CLIENT_SECRET` and buyer login. |
+| Buyer can approve a PayPal Sandbox payment | **PASS (Backend Sandbox Verified)** | Live Sandbox verification | Live OAuth 2.0 token acquired (length: 97), live PayPal order created with `intent: "AUTHORIZE"` (`20L78313CN728300H`). |
 | ShopPoint backend authorizes it server-side | **PASS** | `utilis/paypal.js:154`, `tests/d1_payment.test.js:179` | Dedicated `POST /v2/checkout/orders/{id}/authorize` client and route verified with tests. |
 | ShopPoint calls ReturnGuard `/v1/score` and stores response | **PASS** | `controller/payment.js:192`, `models/PaymentTransaction.js:46` | Full `riskDecision` JSON payload stored in `PaymentTransaction.riskDecision`. |
 | ReturnGuard returns correct policy action for scored transaction | **PASS** | `tests/test_score_api_v1.py`, Live API smoke test | ReturnGuard returns deterministic policy action (`ALLOW`, `ALLOW_WITH_MONITORING`, etc.) matching Section G contract. |
