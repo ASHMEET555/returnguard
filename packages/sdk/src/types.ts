@@ -132,15 +132,44 @@ export interface ModelPerformance {
   active_dataset: string;
 }
 
+export interface AuditReconstructionData {
+  decision: {
+    decision_id: string;
+    order_id: string;
+    merchant_id?: string;
+    channel: string;
+    risk_score: number;
+    tier: string;
+    model_version: string;
+    model_status: string;
+    threshold: number;
+    feature_completeness: number;
+    explanation_status: string;
+    shadow: boolean;
+    created_at?: string | null;
+  };
+  policy_trace: {
+    policy_rule: string;
+    policy_action: string;
+    suggested_action: string;
+    severity: string;
+    tier: string;
+    threshold: number;
+    rule_hits: string[];
+  };
+  shap_top_k: ReasonCode[];
+  rule_hits: string[];
+  feature_snapshot: Record<string, unknown>;
+  relay_events: Array<{
+    event_id: string;
+    event_type: string;
+    status: string;
+    summary?: string | null;
+    received_at?: string | null;
+  }>;
+}
+
 export interface DecisionAuditReconstruction {
-  decision_id: string;
-  order_id: string;
-  timestamp: string;
-  risk_score: number;
-  tier: string;
-  policy_action: string;
-  features: Record<string, unknown>;
-  reasons: ReasonCode[];
-  rules_triggered: string[];
-  evidence_chain?: Array<Record<string, unknown>>;
+  status: string;
+  data: AuditReconstructionData;
 }
