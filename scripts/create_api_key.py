@@ -26,6 +26,8 @@ from db.session import SessionLocal, engine
 
 def create_key(merchant_id: str, name: str, prefix: str = "rg_live_") -> tuple[str, str, str]:
     """Generates an API key, persists its SHA-256 hash, and returns (key_id, merchant_id, plain_key)."""
+    if merchant_id == "merch_legacy":
+        raise ValueError("Cannot provision API keys for legacy migration sentinel 'merch_legacy'")
     db = SessionLocal()
     try:
         # 1. Ensure merchant exists
