@@ -1,8 +1,12 @@
 "use client";
 
 import React, { useMemo } from "react";
+import { ModuleRegistry, AllCommunityModule } from "ag-grid-community";
 import { ReturnGuardProvider, ReturnGuardDashboard } from "@returnguard/react";
 import { ReturnGuardClient } from "@returnguard/sdk";
+
+// Register AG Grid Community modules
+ModuleRegistry.registerModules([AllCommunityModule]);
 
 export default function Home() {
   const client = useMemo(() => {

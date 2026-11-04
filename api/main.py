@@ -1,6 +1,7 @@
 """ReturnGuard FastAPI Application Entrypoint."""
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from api.routes import (
     analytics,
@@ -20,6 +21,15 @@ app = FastAPI(
     title="ReturnGuard API",
     description="AI-powered return-abuse risk detection and dispute evidence API",
     version="0.1.0",
+)
+
+# Enable CORS for frontend dashboard
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Wire auth routes
