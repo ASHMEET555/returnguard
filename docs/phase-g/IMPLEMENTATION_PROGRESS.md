@@ -52,9 +52,9 @@
 
 ## 3. Mocked Data, Placeholders & Hardcoded Values Identified
 
-1. **Payment Status in Grid & Drawer:** Displayed as `Authorized (Pending Capture)` to represent shadow mode. ReturnGuard does not store live PayPal capture status directly.
-2. **Customer Aggregation:** Derived on client side from loaded decisions (`order_id` / `decision_id`). No dedicated `/v1/customers` endpoint exists.
-3. **Date Range / Currency Dropdowns:** Currency (USD, EUR, GBP, INR) and Date Range (24h, 7d, 30d) dropdowns update React context, but `/v1/analytics/summary` does not accept query parameters on the server yet.
+1. **Payment Status in Grid & Drawer:** Updated to explicitly show `Provider Owned (ShopPoint)` and `Not Verified (Owned by Merchant / ShopPoint)`. ReturnGuard recommendation and shadow mode status are displayed strictly separate from external processor outcomes.
+2. **Customer Aggregation:** Explicitly labeled as `Customer Directory (Partial In-Memory Sample)` with a `PARTIAL VIEW` badge indicating the count represents only the current loaded 100-record batch, not lifetime customer history.
+3. **Date Range / Currency Dropdowns:** Updated to disable unsupported cross-currency conversions and time-window filtering with clear limitation tooltips (`[Active: INR]`, `[Lifetime Metrics]`), preventing any misleading implication that server results are filtered.
 4. **Model Name Label:** `candidate_lgbm_v1` is displayed as the serving model from `lgbm_v1_metadata.json`.
 
 ---

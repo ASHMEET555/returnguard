@@ -21,9 +21,14 @@ export const CustomersPage: React.FC = () => {
   return (
     <div>
       <div style={{ marginBottom: 20 }}>
-        <h2 style={{ margin: '0 0 4px 0', fontSize: 20, fontWeight: 700 }}>Customer Directory (Foundation)</h2>
-        <p style={{ margin: 0, fontSize: 13, color: 'var(--rg-text-secondary)' }}>
-          Scoped customer risk entities derived from scored transactions and order references.
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>Customer Directory (Partial In-Memory Sample)</h2>
+          <span style={{ fontSize: 11, background: 'var(--rg-med-bg)', color: 'var(--rg-med-text)', border: '1px solid var(--rg-med-border)', padding: '2px 6px', borderRadius: 4, fontWeight: 600 }}>
+            PARTIAL VIEW
+          </span>
+        </div>
+        <p style={{ margin: '6px 0 0 0', fontSize: 13, color: 'var(--rg-text-secondary)' }}>
+          Sample derived exclusively from the last 100 loaded decisions in this session. This is <strong>not</strong> a complete or lifetime customer history. Dedicated backend customer entities are planned for Phase G Milestone 2 / Phase I.
         </p>
       </div>
 
@@ -38,7 +43,7 @@ export const CustomersPage: React.FC = () => {
               <RiskBadge score={cust.maxScore} />
             </div>
             <div style={{ fontSize: 12, color: 'var(--rg-text-muted)' }}>
-              Scored Transactions: <strong>{cust.count}</strong>
+              Scored in Loaded Page: <strong>{cust.count}</strong>
             </div>
             <div style={{ fontSize: 12, color: 'var(--rg-text-muted)' }}>
               Channel: <strong>{cust.channel}</strong>

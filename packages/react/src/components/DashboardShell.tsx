@@ -59,40 +59,60 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
             <span style={{ fontSize: 13, fontWeight: 600 }}>Active Session</span>
           </div>
           <div className="rg-topbar-right">
-            <select
-              value={currency}
-              onChange={(e) => setCurrency(e.target.value)}
-              style={{
-                background: 'var(--rg-bg-card)',
-                color: 'var(--rg-text-primary)',
-                border: '1px solid var(--rg-border)',
-                borderRadius: 4,
-                padding: '4px 8px',
-                fontSize: 12,
-              }}
-            >
-              <option value="USD">USD ($)</option>
-              <option value="EUR">EUR (€)</option>
-              <option value="GBP">GBP (£)</option>
-              <option value="INR">INR (₹)</option>
-            </select>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <select
+                value={currency}
+                onChange={(e) => setCurrency(e.target.value)}
+                disabled
+                title="Currency filtering is not supported by the backend summary endpoint (aggregates reported in native INR/dataset units)."
+                style={{
+                  background: 'var(--rg-bg-card)',
+                  color: 'var(--rg-text-muted)',
+                  border: '1px solid var(--rg-border)',
+                  borderRadius: 4,
+                  padding: '4px 8px',
+                  fontSize: 12,
+                  cursor: 'not-allowed',
+                  opacity: 0.7,
+                }}
+              >
+                <option value="INR">INR (₹) [Active]</option>
+                <option value="USD">USD ($) [Unsupported]</option>
+              </select>
+              <span
+                style={{ fontSize: 10, color: 'var(--rg-med-text)', cursor: 'help' }}
+                title="Backend returns native currency aggregates; cross-currency filtering disabled to prevent inaccurate conversions."
+              >
+                ⓘ Fixed
+              </span>
+            </div>
 
-            <select
-              value={dateRange}
-              onChange={(e) => setDateRange(e.target.value)}
-              style={{
-                background: 'var(--rg-bg-card)',
-                color: 'var(--rg-text-primary)',
-                border: '1px solid var(--rg-border)',
-                borderRadius: 4,
-                padding: '4px 8px',
-                fontSize: 12,
-              }}
-            >
-              <option value="24h">Last 24 Hours</option>
-              <option value="7d">Last 7 Days</option>
-              <option value="30d">Last 30 Days</option>
-            </select>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <select
+                value={dateRange}
+                onChange={(e) => setDateRange(e.target.value)}
+                disabled
+                title="Date window filtering is not supported on /v1/analytics/summary (returns lifetime tenant metrics)."
+                style={{
+                  background: 'var(--rg-bg-card)',
+                  color: 'var(--rg-text-muted)',
+                  border: '1px solid var(--rg-border)',
+                  borderRadius: 4,
+                  padding: '4px 8px',
+                  fontSize: 12,
+                  cursor: 'not-allowed',
+                  opacity: 0.7,
+                }}
+              >
+                <option value="all">All-Time [Lifetime Metrics]</option>
+              </select>
+              <span
+                style={{ fontSize: 10, color: 'var(--rg-med-text)', cursor: 'help' }}
+                title="Backend provides lifetime tenant summary; time-window bucketing deferred to Milestone 2."
+              >
+                ⓘ Fixed
+              </span>
+            </div>
 
             <button
               type="button"

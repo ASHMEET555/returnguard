@@ -63,10 +63,10 @@ export const TransactionsGrid: React.FC<TransactionsGridProps> = ({
       {
         headerName: 'Payment Status',
         width: 150,
-        valueGetter: () => 'Authorized',
+        valueGetter: () => 'Not Integrated (Provider Owned)',
         cellRenderer: () => (
-          <span style={{ fontSize: 12, color: 'var(--rg-low-text)', fontWeight: 600 }}>
-            ● Authorized
+          <span style={{ fontSize: 12, color: 'var(--rg-text-muted)', fontStyle: 'italic' }}>
+            Provider Owned (ShopPoint)
           </span>
         ),
       },

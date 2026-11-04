@@ -312,47 +312,69 @@ var DashboardShell = ({
           /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { style: { fontSize: 13, fontWeight: 600 }, children: "Active Session" })
         ] }),
         /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { className: "rg-topbar-right", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(
-            "select",
-            {
-              value: currency,
-              onChange: (e) => setCurrency(e.target.value),
-              style: {
-                background: "var(--rg-bg-card)",
-                color: "var(--rg-text-primary)",
-                border: "1px solid var(--rg-border)",
-                borderRadius: 4,
-                padding: "4px 8px",
-                fontSize: 12
-              },
-              children: [
-                /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("option", { value: "USD", children: "USD ($)" }),
-                /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("option", { value: "EUR", children: "EUR (\u20AC)" }),
-                /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("option", { value: "GBP", children: "GBP (\xA3)" }),
-                /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("option", { value: "INR", children: "INR (\u20B9)" })
-              ]
-            }
-          ),
-          /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(
-            "select",
-            {
-              value: dateRange,
-              onChange: (e) => setDateRange(e.target.value),
-              style: {
-                background: "var(--rg-bg-card)",
-                color: "var(--rg-text-primary)",
-                border: "1px solid var(--rg-border)",
-                borderRadius: 4,
-                padding: "4px 8px",
-                fontSize: 12
-              },
-              children: [
-                /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("option", { value: "24h", children: "Last 24 Hours" }),
-                /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("option", { value: "7d", children: "Last 7 Days" }),
-                /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("option", { value: "30d", children: "Last 30 Days" })
-              ]
-            }
-          ),
+          /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { style: { display: "flex", alignItems: "center", gap: 6 }, children: [
+            /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(
+              "select",
+              {
+                value: currency,
+                onChange: (e) => setCurrency(e.target.value),
+                disabled: true,
+                title: "Currency filtering is not supported by the backend summary endpoint (aggregates reported in native INR/dataset units).",
+                style: {
+                  background: "var(--rg-bg-card)",
+                  color: "var(--rg-text-muted)",
+                  border: "1px solid var(--rg-border)",
+                  borderRadius: 4,
+                  padding: "4px 8px",
+                  fontSize: 12,
+                  cursor: "not-allowed",
+                  opacity: 0.7
+                },
+                children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("option", { value: "INR", children: "INR (\u20B9) [Active]" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("option", { value: "USD", children: "USD ($) [Unsupported]" })
+                ]
+              }
+            ),
+            /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+              "span",
+              {
+                style: { fontSize: 10, color: "var(--rg-med-text)", cursor: "help" },
+                title: "Backend returns native currency aggregates; cross-currency filtering disabled to prevent inaccurate conversions.",
+                children: "\u24D8 Fixed"
+              }
+            )
+          ] }),
+          /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { style: { display: "flex", alignItems: "center", gap: 6 }, children: [
+            /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+              "select",
+              {
+                value: dateRange,
+                onChange: (e) => setDateRange(e.target.value),
+                disabled: true,
+                title: "Date window filtering is not supported on /v1/analytics/summary (returns lifetime tenant metrics).",
+                style: {
+                  background: "var(--rg-bg-card)",
+                  color: "var(--rg-text-muted)",
+                  border: "1px solid var(--rg-border)",
+                  borderRadius: 4,
+                  padding: "4px 8px",
+                  fontSize: 12,
+                  cursor: "not-allowed",
+                  opacity: 0.7
+                },
+                children: /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("option", { value: "all", children: "All-Time [Lifetime Metrics]" })
+              }
+            ),
+            /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+              "span",
+              {
+                style: { fontSize: 10, color: "var(--rg-med-text)", cursor: "help" },
+                title: "Backend provides lifetime tenant summary; time-window bucketing deferred to Milestone 2.",
+                children: "\u24D8 Fixed"
+              }
+            )
+          ] }),
           /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
             "button",
             {
@@ -555,8 +577,8 @@ var TransactionsGrid = ({
       {
         headerName: "Payment Status",
         width: 150,
-        valueGetter: () => "Authorized",
-        cellRenderer: () => /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { style: { fontSize: 12, color: "var(--rg-low-text)", fontWeight: 600 }, children: "\u25CF Authorized" })
+        valueGetter: () => "Not Integrated (Provider Owned)",
+        cellRenderer: () => /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { style: { fontSize: 12, color: "var(--rg-text-muted)", fontStyle: "italic" }, children: "Provider Owned (ShopPoint)" })
       },
       {
         field: "model_version",
@@ -697,14 +719,14 @@ var DetailDrawer = ({ decisionId, onClose }) => {
               /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("strong", { children: decision.channel || "web" })
             ] }),
             /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { children: [
-              /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("span", { style: { color: "var(--rg-text-muted)" }, children: "Mode:" }),
+              /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("span", { style: { color: "var(--rg-text-muted)" }, children: "ReturnGuard Mode:" }),
               " ",
-              /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("strong", { children: decision.shadow ? "Shadow Mode" : "Enforcement" })
+              /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("strong", { children: decision.shadow ? "Shadow (Non-blocking)" : "Live Policy Enforcement" })
             ] }),
             /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { children: [
-              /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("span", { style: { color: "var(--rg-text-muted)" }, children: "Provider Status:" }),
+              /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("span", { style: { color: "var(--rg-text-muted)" }, children: "Payment Processor Status:" }),
               " ",
-              /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("strong", { style: { color: "var(--rg-low-text)" }, children: "Authorized (Pending Capture)" })
+              /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("span", { style: { color: "var(--rg-text-muted)", fontStyle: "italic" }, children: "Not Verified (Owned by Merchant / ShopPoint)" })
             ] })
           ] })
         ] }),
@@ -849,8 +871,15 @@ var CustomersPage = () => {
   }, [items]);
   return /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { children: [
     /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { style: { marginBottom: 20 }, children: [
-      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("h2", { style: { margin: "0 0 4px 0", fontSize: 20, fontWeight: 700 }, children: "Customer Directory (Foundation)" }),
-      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("p", { style: { margin: 0, fontSize: 13, color: "var(--rg-text-secondary)" }, children: "Scoped customer risk entities derived from scored transactions and order references." })
+      /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { style: { display: "flex", alignItems: "center", gap: 8 }, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("h2", { style: { margin: 0, fontSize: 20, fontWeight: 700 }, children: "Customer Directory (Partial In-Memory Sample)" }),
+        /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { style: { fontSize: 11, background: "var(--rg-med-bg)", color: "var(--rg-med-text)", border: "1px solid var(--rg-med-border)", padding: "2px 6px", borderRadius: 4, fontWeight: 600 }, children: "PARTIAL VIEW" })
+      ] }),
+      /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("p", { style: { margin: "6px 0 0 0", fontSize: 13, color: "var(--rg-text-secondary)" }, children: [
+        "Sample derived exclusively from the last 100 loaded decisions in this session. This is ",
+        /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("strong", { children: "not" }),
+        " a complete or lifetime customer history. Dedicated backend customer entities are planned for Phase G Milestone 2 / Phase I."
+      ] })
     ] }),
     loading && /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("div", { style: { color: "var(--rg-text-muted)" }, children: "Loading customers..." }),
     error && /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { style: { color: "var(--rg-high-text)" }, children: [
@@ -863,7 +892,7 @@ var CustomersPage = () => {
         /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(RiskBadge, { score: cust.maxScore })
       ] }),
       /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { style: { fontSize: 12, color: "var(--rg-text-muted)" }, children: [
-        "Scored Transactions: ",
+        "Scored in Loaded Page: ",
         /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("strong", { children: cust.count })
       ] }),
       /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { style: { fontSize: 12, color: "var(--rg-text-muted)" }, children: [

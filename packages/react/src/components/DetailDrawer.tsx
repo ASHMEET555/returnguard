@@ -114,12 +114,14 @@ export const DetailDrawer: React.FC<DetailDrawerProps> = ({ decisionId, onClose 
                     <strong>{decision.channel || 'web'}</strong>
                   </div>
                   <div>
-                    <span style={{ color: 'var(--rg-text-muted)' }}>Mode:</span>{' '}
-                    <strong>{decision.shadow ? 'Shadow Mode' : 'Enforcement'}</strong>
+                    <span style={{ color: 'var(--rg-text-muted)' }}>ReturnGuard Mode:</span>{' '}
+                    <strong>{decision.shadow ? 'Shadow (Non-blocking)' : 'Live Policy Enforcement'}</strong>
                   </div>
                   <div>
-                    <span style={{ color: 'var(--rg-text-muted)' }}>Provider Status:</span>{' '}
-                    <strong style={{ color: 'var(--rg-low-text)' }}>Authorized (Pending Capture)</strong>
+                    <span style={{ color: 'var(--rg-text-muted)' }}>Payment Processor Status:</span>{' '}
+                    <span style={{ color: 'var(--rg-text-muted)', fontStyle: 'italic' }}>
+                      Not Verified (Owned by Merchant / ShopPoint)
+                    </span>
                   </div>
                 </div>
               </div>
