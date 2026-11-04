@@ -1,10 +1,14 @@
 import React, { useMemo } from 'react';
 import { AgGridReact } from 'ag-grid-react';
+import { ModuleRegistry, AllCommunityModule } from 'ag-grid-community';
 import type { ColDef, RowClickedEvent } from 'ag-grid-community';
 import 'ag-grid-community/styles/ag-grid.css';
 import 'ag-grid-community/styles/ag-theme-alpine.css';
 import type { ScoreResult } from '@returnguard/sdk';
 import { RiskBadge } from './RiskBadge';
+
+// Register standard community modules for AG Grid v33+
+ModuleRegistry.registerModules([AllCommunityModule]);
 
 export interface TransactionsGridProps {
   items: ScoreResult[];

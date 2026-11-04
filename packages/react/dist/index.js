@@ -558,9 +558,11 @@ var OverviewPage = () => {
 // src/components/TransactionsGrid.tsx
 import { useMemo as useMemo2 } from "react";
 import { AgGridReact } from "ag-grid-react";
+import { ModuleRegistry, AllCommunityModule } from "ag-grid-community";
 import "ag-grid-community/styles/ag-grid.css";
 import "ag-grid-community/styles/ag-theme-alpine.css";
 import { jsx as jsx5 } from "react/jsx-runtime";
+ModuleRegistry.registerModules([AllCommunityModule]);
 var TransactionsGrid = ({
   items,
   loading = false,

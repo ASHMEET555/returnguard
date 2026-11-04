@@ -607,9 +607,11 @@ var OverviewPage = () => {
 // src/components/TransactionsGrid.tsx
 var import_react3 = require("react");
 var import_ag_grid_react = require("ag-grid-react");
+var import_ag_grid_community = require("ag-grid-community");
 var import_ag_grid = require("ag-grid-community/styles/ag-grid.css");
 var import_ag_theme_alpine = require("ag-grid-community/styles/ag-theme-alpine.css");
 var import_jsx_runtime5 = require("react/jsx-runtime");
+import_ag_grid_community.ModuleRegistry.registerModules([import_ag_grid_community.AllCommunityModule]);
 var TransactionsGrid = ({
   items,
   loading = false,

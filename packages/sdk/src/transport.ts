@@ -60,7 +60,9 @@ export class Transport {
     this.baseUrl = options.baseUrl.replace(/\/+$/, "");
     this.apiKey = options.apiKey;
     this.tokenProvider = options.tokenProvider;
-    this.fetchFn = options.fetch || globalThis.fetch;
+    const rawFetch = options.fetch || globalThis.fetch;
+    this.fetchFn = ((...args: Parameters<typeof globalThis.fetch>) =>
+      rawFetch.call(globalThis, ...args)) as typeof globalThis.fetch;
     this.timeoutMs = options.timeoutMs ?? 10000;
     this.maxRetries = options.retry?.maxRetries ?? 1;
     this.retryDelayMs = options.retry?.delayMs ?? 300;
