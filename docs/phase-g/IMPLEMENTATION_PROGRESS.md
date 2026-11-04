@@ -54,8 +54,8 @@
 
 1. **Payment Status in Grid & Drawer:** Updated to explicitly show `Provider Owned (ShopPoint)` and `Not Verified (Owned by Merchant / ShopPoint)`. ReturnGuard recommendation and shadow mode status are displayed strictly separate from external processor outcomes.
 2. **Customer Aggregation:** Explicitly labeled as `Customer Directory (Partial In-Memory Sample)` with a `PARTIAL VIEW` badge indicating the count represents only the current loaded 100-record batch, not lifetime customer history.
-3. **Date Range / Currency Dropdowns:** Updated to disable unsupported cross-currency conversions and time-window filtering with clear limitation tooltips (`[Active: INR]`, `[Lifetime Metrics]`), preventing any misleading implication that server results are filtered.
-4. **Model Name Label:** `candidate_lgbm_v1` is displayed as the serving model from `lgbm_v1_metadata.json`.
+3. **Date Range & Currency Fixed Labels:** Multi-currency dropdown and date selector removed. Topbar now displays static badges: `Currency: Native Dataset / Provider Specific` and `Range: Lifetime Aggregates` with informative tooltips. No client-side FX transformation or mock filtering occurs.
+4. **Shadow vs Live Policy:** Sourced dynamically from API responses (`decision.shadow` boolean in `ScoreResult` and `AuditScoreEvent`). `DetailDrawer` renders `decision.shadow ? 'Shadow (Non-blocking)' : 'Live Policy Enforcement'`.
 
 ---
 

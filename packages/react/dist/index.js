@@ -227,7 +227,7 @@ var DashboardShell = ({
   brandTitle = "ReturnGuard",
   children
 }) => {
-  const { theme, setTheme, currency, setCurrency, dateRange, setDateRange } = useReturnGuard();
+  const { theme, setTheme } = useReturnGuard();
   const navItems = [
     { id: "overview", label: "Overview", icon: "\u{1F4CA}" },
     { id: "transactions", label: "Transactions", icon: "\u{1F4B3}" },
@@ -267,64 +267,49 @@ var DashboardShell = ({
         ] }),
         /* @__PURE__ */ jsxs("div", { className: "rg-topbar-right", children: [
           /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 6 }, children: [
-            /* @__PURE__ */ jsxs(
-              "select",
+            /* @__PURE__ */ jsx3(
+              "span",
               {
-                value: currency,
-                onChange: (e) => setCurrency(e.target.value),
-                disabled: true,
-                title: "Currency filtering is not supported by the backend summary endpoint (aggregates reported in native INR/dataset units).",
                 style: {
                   background: "var(--rg-bg-card)",
                   color: "var(--rg-text-muted)",
                   border: "1px solid var(--rg-border)",
                   borderRadius: 4,
                   padding: "4px 8px",
-                  fontSize: 12,
-                  cursor: "not-allowed",
-                  opacity: 0.7
+                  fontSize: 12
                 },
-                children: [
-                  /* @__PURE__ */ jsx3("option", { value: "INR", children: "INR (\u20B9) [Active]" }),
-                  /* @__PURE__ */ jsx3("option", { value: "USD", children: "USD ($) [Unsupported]" })
-                ]
+                children: "Currency: Native Dataset / Provider Specific"
               }
             ),
             /* @__PURE__ */ jsx3(
               "span",
               {
                 style: { fontSize: 10, color: "var(--rg-med-text)", cursor: "help" },
-                title: "Backend returns native currency aggregates; cross-currency filtering disabled to prevent inaccurate conversions.",
+                title: "Backend provides raw monetary amounts per transaction without guaranteed FX conversion. Global currency filter disabled.",
                 children: "\u24D8 Fixed"
               }
             )
           ] }),
           /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 6 }, children: [
             /* @__PURE__ */ jsx3(
-              "select",
+              "span",
               {
-                value: dateRange,
-                onChange: (e) => setDateRange(e.target.value),
-                disabled: true,
-                title: "Date window filtering is not supported on /v1/analytics/summary (returns lifetime tenant metrics).",
                 style: {
                   background: "var(--rg-bg-card)",
                   color: "var(--rg-text-muted)",
                   border: "1px solid var(--rg-border)",
                   borderRadius: 4,
                   padding: "4px 8px",
-                  fontSize: 12,
-                  cursor: "not-allowed",
-                  opacity: 0.7
+                  fontSize: 12
                 },
-                children: /* @__PURE__ */ jsx3("option", { value: "all", children: "All-Time [Lifetime Metrics]" })
+                children: "Range: Lifetime Aggregates"
               }
             ),
             /* @__PURE__ */ jsx3(
               "span",
               {
                 style: { fontSize: 10, color: "var(--rg-med-text)", cursor: "help" },
-                title: "Backend provides lifetime tenant summary; time-window bucketing deferred to Milestone 2.",
+                title: "Backend /v1/analytics/summary returns all-time scored decisions. Windowed time series filtering deferred to Milestone 2.",
                 children: "\u24D8 Fixed"
               }
             )

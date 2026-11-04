@@ -14,7 +14,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
   brandTitle = 'ReturnGuard',
   children,
 }) => {
-  const { theme, setTheme, currency, setCurrency, dateRange, setDateRange } = useReturnGuard();
+  const { theme, setTheme } = useReturnGuard();
 
   const navItems = [
     { id: 'overview', label: 'Overview', icon: '📊' },
@@ -60,11 +60,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
           </div>
           <div className="rg-topbar-right">
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <select
-                value={currency}
-                onChange={(e) => setCurrency(e.target.value)}
-                disabled
-                title="Currency filtering is not supported by the backend summary endpoint (aggregates reported in native INR/dataset units)."
+              <span
                 style={{
                   background: 'var(--rg-bg-card)',
                   color: 'var(--rg-text-muted)',
@@ -72,27 +68,20 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
                   borderRadius: 4,
                   padding: '4px 8px',
                   fontSize: 12,
-                  cursor: 'not-allowed',
-                  opacity: 0.7,
                 }}
               >
-                <option value="INR">INR (₹) [Active]</option>
-                <option value="USD">USD ($) [Unsupported]</option>
-              </select>
+                Currency: Native Dataset / Provider Specific
+              </span>
               <span
                 style={{ fontSize: 10, color: 'var(--rg-med-text)', cursor: 'help' }}
-                title="Backend returns native currency aggregates; cross-currency filtering disabled to prevent inaccurate conversions."
+                title="Backend provides raw monetary amounts per transaction without guaranteed FX conversion. Global currency filter disabled."
               >
                 ⓘ Fixed
               </span>
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <select
-                value={dateRange}
-                onChange={(e) => setDateRange(e.target.value)}
-                disabled
-                title="Date window filtering is not supported on /v1/analytics/summary (returns lifetime tenant metrics)."
+              <span
                 style={{
                   background: 'var(--rg-bg-card)',
                   color: 'var(--rg-text-muted)',
@@ -100,15 +89,13 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
                   borderRadius: 4,
                   padding: '4px 8px',
                   fontSize: 12,
-                  cursor: 'not-allowed',
-                  opacity: 0.7,
                 }}
               >
-                <option value="all">All-Time [Lifetime Metrics]</option>
-              </select>
+                Range: Lifetime Aggregates
+              </span>
               <span
                 style={{ fontSize: 10, color: 'var(--rg-med-text)', cursor: 'help' }}
-                title="Backend provides lifetime tenant summary; time-window bucketing deferred to Milestone 2."
+                title="Backend /v1/analytics/summary returns all-time scored decisions. Windowed time series filtering deferred to Milestone 2."
               >
                 ⓘ Fixed
               </span>
