@@ -200,3 +200,44 @@ class TenantScopedRepository:
             .order_by(PaymentEvent.received_at.asc())
             .all()
         )
+
+    def list_decisions(
+        self,
+        cursor: Optional[str] = None,
+        limit: int = 50,
+    ) -> tuple[List[AuditScoreEvent], Optional[str]]:
+        """Cursor-paginated listing of decisions for this tenant.
+
+        Ordered stably by created_at DESC, id DESC.
+        Limit capped at 100.
+        """
+        import base64
+        limit = max(1, min(limit, 100))
+        query = (
+            self.db.query(AuditScoreEvent)
+            .filter(AuditScoreEvent.merchant_id == self.merchant_id)
+        )
+
+        if cursor:
+            try:
+                decoded = base64.urlsafe_b64decode(cursor.encode("utf-8")).decode("utf-8")
+                c_created_str, c_id = decoded.split("|", 1)
+                c_created = datetime.datetime.fromisoformat(c_created_str)
+                query = query.filter(
+                    (AuditScoreEvent.created_at < c_created)
+                    | ((AuditScoreEvent.created_at == c_created) & (AuditScoreEvent.id < c_id))
+                )
+            except Exception:
+                pass
+
+        query = query.order_by(AuditScoreEvent.created_at.desc(), AuditScoreEvent.id.desc())
+        items = query.limit(limit + 1).all()
+
+        next_cursor = None
+        if len(items) > limit:
+            items = items[:limit]
+            last_item = items[-1]
+            raw_c = f"{last_item.created_at.isoformat()}|{last_item.id}"
+            next_cursor = base64.urlsafe_b64encode(raw_c.encode("utf-8")).decode("utf-8")
+
+        return items, next_cursor

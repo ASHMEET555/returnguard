@@ -2,7 +2,18 @@
 
 from fastapi import FastAPI
 
-from api.routes import assistant, disputes, events, payments, score, webhooks
+from api.routes import (
+    analytics,
+    assistant,
+    disputes,
+    events,
+    models,
+    payments,
+    reviews,
+    score,
+    webhooks,
+)
+from auth.embed_tokens import router as auth_router
 
 app = FastAPI(
     title="ReturnGuard API",
@@ -10,9 +21,15 @@ app = FastAPI(
     version="0.1.0",
 )
 
-# Wire empty routers
+# Wire auth routes
+app.include_router(auth_router)
+
+# Wire feature routers
 app.include_router(score.router)
 app.include_router(events.router)
+app.include_router(reviews.router)
+app.include_router(analytics.router)
+app.include_router(models.router)
 app.include_router(payments.router)
 app.include_router(webhooks.router)
 app.include_router(disputes.router)
