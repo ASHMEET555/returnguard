@@ -236,7 +236,7 @@ def get_decision_by_id(
         feature_completeness=float(audit_row.feature_completeness),
         explanation_status=audit_row.explanation_status,
         shadow=bool(audit_row.shadow),
-        decision_id=audit_row.decision_id,
+        decision_id=audit_row.decision_id or audit_row.order_id or audit_row.id,
     )
 
 
@@ -304,7 +304,7 @@ def get_decision_audit_reconstruction(
         "status": "success",
         "data": {
             "decision": {
-                "decision_id": audit_row.decision_id,
+                "decision_id": audit_row.decision_id or audit_row.order_id or audit_row.id,
                 "order_id": audit_row.order_id,
                 "merchant_id": audit_row.merchant_id,
                 "channel": audit_row.channel,
@@ -398,7 +398,7 @@ def list_decisions(
                 feature_completeness=float(audit_row.feature_completeness),
                 explanation_status=audit_row.explanation_status,
                 shadow=bool(audit_row.shadow),
-                decision_id=audit_row.decision_id,
+                decision_id=audit_row.decision_id or audit_row.order_id or audit_row.id,
             )
         )
 

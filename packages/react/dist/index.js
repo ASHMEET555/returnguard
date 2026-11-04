@@ -569,55 +569,73 @@ var TransactionsGrid = ({
   onRowClick,
   quickFilterText = ""
 }) => {
+  const { theme } = useReturnGuard();
+  const gridThemeClass = theme === "light" ? "ag-theme-alpine" : "ag-theme-alpine-dark";
   const columnDefs = useMemo2(
     () => [
       {
         field: "order_id",
         headerName: "Order ID",
-        minWidth: 160,
+        minWidth: 190,
+        flex: 1.3,
         pinned: "left",
-        cellRenderer: (params) => /* @__PURE__ */ jsx5("span", { style: { fontFamily: "monospace", fontWeight: 600 }, children: params.value || "--" })
+        cellRenderer: (params) => /* @__PURE__ */ jsx5("span", { style: { fontFamily: "monospace", fontWeight: 600, color: "var(--rg-text-primary)" }, children: params.value || "--" })
       },
       {
         field: "channel",
         headerName: "Channel",
-        width: 110
+        minWidth: 100,
+        flex: 0.8,
+        cellRenderer: (params) => /* @__PURE__ */ jsx5(
+          "span",
+          {
+            style: {
+              fontSize: 11,
+              fontWeight: 600,
+              textTransform: "uppercase",
+              padding: "2px 8px",
+              borderRadius: 4,
+              background: "var(--rg-bg-tertiary)",
+              color: "var(--rg-text-secondary)"
+            },
+            children: params.value || "web"
+          }
+        )
       },
       {
         field: "risk_score",
         headerName: "Risk Score",
-        width: 140,
+        minWidth: 130,
+        flex: 1,
         cellRenderer: (params) => /* @__PURE__ */ jsx5(RiskBadge, { score: params.value }),
         sort: "desc"
       },
       {
         field: "suggested_action",
-        headerName: "ReturnGuard Policy",
-        width: 180,
+        headerName: "Policy Action",
+        minWidth: 160,
+        flex: 1.2,
         cellRenderer: (params) => /* @__PURE__ */ jsx5(RiskBadge, { action: params.value })
-      },
-      {
-        field: "tier",
-        headerName: "Tier",
-        width: 110,
-        cellRenderer: (params) => /* @__PURE__ */ jsx5(RiskBadge, { severity: params.value })
       },
       {
         field: "severity",
         headerName: "Severity",
-        width: 110,
+        minWidth: 110,
+        flex: 0.9,
         cellRenderer: (params) => /* @__PURE__ */ jsx5(RiskBadge, { severity: params.value })
       },
       {
         headerName: "Payment Status",
-        width: 150,
+        minWidth: 180,
+        flex: 1.3,
         valueGetter: () => "Not Integrated (Provider Owned)",
         cellRenderer: () => /* @__PURE__ */ jsx5("span", { style: { fontSize: 12, color: "var(--rg-text-muted)", fontStyle: "italic" }, children: "Provider Owned (ShopPoint)" })
       },
       {
         field: "model_version",
-        headerName: "Model Version",
-        minWidth: 150,
+        headerName: "Model",
+        minWidth: 140,
+        flex: 1,
         cellRenderer: (params) => /* @__PURE__ */ jsx5("span", { style: { fontSize: 12, fontFamily: "monospace", color: "var(--rg-text-muted)" }, children: params.value || "candidate_lgbm_v1" })
       }
     ],
@@ -642,13 +660,15 @@ var TransactionsGrid = ({
   return /* @__PURE__ */ jsx5(
     "div",
     {
-      className: "ag-theme-alpine-dark",
+      className: gridThemeClass,
       style: {
-        height: 520,
+        height: "calc(100vh - 240px)",
+        minHeight: 520,
         width: "100%",
         borderRadius: 8,
         overflow: "hidden",
-        border: "1px solid var(--rg-border)"
+        border: "1px solid var(--rg-border)",
+        boxShadow: "0 1px 3px rgba(0,0,0,0.06)"
       },
       children: /* @__PURE__ */ jsx5(
         AgGridReact,
@@ -658,7 +678,15 @@ var TransactionsGrid = ({
           defaultColDef,
           loading,
           quickFilterText,
-          rowSelection: { mode: "singleRow" },
+          rowSelection: {
+            mode: "singleRow",
+            checkboxes: false,
+            enableClickSelection: true
+          },
+          rowHeight: 48,
+          headerHeight: 44,
+          animateRows: true,
+          suppressCellFocus: true,
           onRowClicked: handleRowClicked
         }
       )

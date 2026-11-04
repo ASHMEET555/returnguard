@@ -335,3 +335,32 @@
   letter-spacing: 0.04em;
   margin-bottom: 12px;
 }
+
+/* AG Grid Smooth Theme Polish */
+.ag-theme-alpine,
+.ag-theme-alpine-dark {
+  --ag-font-family: var(--rg-font);
+  --ag-font-size: 13px;
+  --ag-border-radius: 8px;
+}
+
+.ag-theme-alpine .ag-row,
+.ag-theme-alpine-dark .ag-row {
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.ag-theme-alpine .ag-row:hover {
+  background-color: #f1f5f9 !important;
+}
+
+.ag-theme-alpine-dark .ag-row:hover {
+  background-color: rgba(59, 130, 246, 0.08) !important;
+}
+
+.ag-theme-alpine .ag-header-cell-label,
+.ag-theme-alpine-dark .ag-header-cell-label {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
