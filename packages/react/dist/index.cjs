@@ -3,8 +3,22 @@ var __create = Object.create;
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
+var __getOwnPropSymbols = Object.getOwnPropertySymbols;
 var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __propIsEnum = Object.prototype.propertyIsEnumerable;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __spreadValues = (a, b) => {
+  for (var prop in b || (b = {}))
+    if (__hasOwnProp.call(b, prop))
+      __defNormalProp(a, prop, b[prop]);
+  if (__getOwnPropSymbols)
+    for (var prop of __getOwnPropSymbols(b)) {
+      if (__propIsEnum.call(b, prop))
+        __defNormalProp(a, prop, b[prop]);
+    }
+  return a;
+};
 var __export = (target, all) => {
   for (var name in all)
     __defProp(target, name, { get: all[name], enumerable: true });
@@ -117,6 +131,7 @@ function useRiskSummary() {
   return { data, loading, error, refetch: fetchSummary };
 }
 function useRiskDecisions(limit = 25) {
+  var _a;
   const { client } = useReturnGuard();
   const [page, setPage] = (0, import_react2.useState)(null);
   const [loading, setLoading] = (0, import_react2.useState)(true);
@@ -138,7 +153,7 @@ function useRiskDecisions(limit = 25) {
     fetchDecisions(cursor);
   }, [fetchDecisions, cursor]);
   const nextPage = (0, import_react2.useCallback)(() => {
-    if (page?.next_cursor) {
+    if (page == null ? void 0 : page.next_cursor) {
       setCursor(page.next_cursor);
     }
   }, [page]);
@@ -146,9 +161,9 @@ function useRiskDecisions(limit = 25) {
     setCursor(void 0);
   }, []);
   return {
-    items: page?.items ?? [],
-    nextCursor: page?.next_cursor,
-    hasMore: Boolean(page?.next_cursor),
+    items: (_a = page == null ? void 0 : page.items) != null ? _a : [],
+    nextCursor: page == null ? void 0 : page.next_cursor,
+    hasMore: Boolean(page == null ? void 0 : page.next_cursor),
     loading,
     error,
     nextPage,
@@ -392,7 +407,7 @@ var OverviewPage = () => {
       )
     ] });
   }
-  const summary = data ?? {
+  const summary = data != null ? data : {
     tenant_id: "default",
     total_decisions: 0,
     allow_count: 0,
@@ -562,7 +577,8 @@ var TransactionsGrid = ({
     []
   );
   const handleRowClicked = (event) => {
-    const id = event.data?.decision_id || event.data?.order_id;
+    var _a, _b;
+    const id = ((_a = event.data) == null ? void 0 : _a.decision_id) || ((_b = event.data) == null ? void 0 : _b.order_id);
     if (id && onRowClick) {
       onRowClick(id);
     }
@@ -606,7 +622,7 @@ var DetailDrawer = ({ decisionId, onClose }) => {
     /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { className: "rg-drawer-header", children: [
       /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { children: [
         /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { style: { fontSize: 11, color: "var(--rg-text-muted)", textTransform: "uppercase" }, children: "Transaction Investigation" }),
-        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { style: { fontSize: 16, fontWeight: 700, marginTop: 2 }, children: decision?.order_id || decisionId })
+        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { style: { fontSize: 16, fontWeight: 700, marginTop: 2 }, children: (decision == null ? void 0 : decision.order_id) || decisionId })
       ] }),
       /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(
         "button",
@@ -829,7 +845,7 @@ var CustomersPage = () => {
       existing.maxScore = Math.max(existing.maxScore, item.risk_score || 0);
       map.set(custId, existing);
     }
-    return Array.from(map.entries()).map(([id, stats]) => ({ id, ...stats }));
+    return Array.from(map.entries()).map(([id, stats]) => __spreadValues({ id }, stats));
   }, [items]);
   return /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { children: [
     /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { style: { marginBottom: 20 }, children: [

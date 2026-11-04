@@ -1,3 +1,20 @@
+var __defProp = Object.defineProperty;
+var __getOwnPropSymbols = Object.getOwnPropertySymbols;
+var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __propIsEnum = Object.prototype.propertyIsEnumerable;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __spreadValues = (a, b) => {
+  for (var prop in b || (b = {}))
+    if (__hasOwnProp.call(b, prop))
+      __defNormalProp(a, prop, b[prop]);
+  if (__getOwnPropSymbols)
+    for (var prop of __getOwnPropSymbols(b)) {
+      if (__propIsEnum.call(b, prop))
+        __defNormalProp(a, prop, b[prop]);
+    }
+  return a;
+};
+
 // src/context.tsx
 import { createContext, useContext, useMemo, useState, useEffect } from "react";
 import { ReturnGuardClient } from "@returnguard/sdk";
@@ -68,6 +85,7 @@ function useRiskSummary() {
   return { data, loading, error, refetch: fetchSummary };
 }
 function useRiskDecisions(limit = 25) {
+  var _a;
   const { client } = useReturnGuard();
   const [page, setPage] = useState2(null);
   const [loading, setLoading] = useState2(true);
@@ -89,7 +107,7 @@ function useRiskDecisions(limit = 25) {
     fetchDecisions(cursor);
   }, [fetchDecisions, cursor]);
   const nextPage = useCallback(() => {
-    if (page?.next_cursor) {
+    if (page == null ? void 0 : page.next_cursor) {
       setCursor(page.next_cursor);
     }
   }, [page]);
@@ -97,9 +115,9 @@ function useRiskDecisions(limit = 25) {
     setCursor(void 0);
   }, []);
   return {
-    items: page?.items ?? [],
-    nextCursor: page?.next_cursor,
-    hasMore: Boolean(page?.next_cursor),
+    items: (_a = page == null ? void 0 : page.items) != null ? _a : [],
+    nextCursor: page == null ? void 0 : page.next_cursor,
+    hasMore: Boolean(page == null ? void 0 : page.next_cursor),
     loading,
     error,
     nextPage,
@@ -343,7 +361,7 @@ var OverviewPage = () => {
       )
     ] });
   }
-  const summary = data ?? {
+  const summary = data != null ? data : {
     tenant_id: "default",
     total_decisions: 0,
     allow_count: 0,
@@ -513,7 +531,8 @@ var TransactionsGrid = ({
     []
   );
   const handleRowClicked = (event) => {
-    const id = event.data?.decision_id || event.data?.order_id;
+    var _a, _b;
+    const id = ((_a = event.data) == null ? void 0 : _a.decision_id) || ((_b = event.data) == null ? void 0 : _b.order_id);
     if (id && onRowClick) {
       onRowClick(id);
     }
@@ -557,7 +576,7 @@ var DetailDrawer = ({ decisionId, onClose }) => {
     /* @__PURE__ */ jsxs3("div", { className: "rg-drawer-header", children: [
       /* @__PURE__ */ jsxs3("div", { children: [
         /* @__PURE__ */ jsx6("div", { style: { fontSize: 11, color: "var(--rg-text-muted)", textTransform: "uppercase" }, children: "Transaction Investigation" }),
-        /* @__PURE__ */ jsx6("div", { style: { fontSize: 16, fontWeight: 700, marginTop: 2 }, children: decision?.order_id || decisionId })
+        /* @__PURE__ */ jsx6("div", { style: { fontSize: 16, fontWeight: 700, marginTop: 2 }, children: (decision == null ? void 0 : decision.order_id) || decisionId })
       ] }),
       /* @__PURE__ */ jsx6(
         "button",
@@ -780,7 +799,7 @@ var CustomersPage = () => {
       existing.maxScore = Math.max(existing.maxScore, item.risk_score || 0);
       map.set(custId, existing);
     }
-    return Array.from(map.entries()).map(([id, stats]) => ({ id, ...stats }));
+    return Array.from(map.entries()).map(([id, stats]) => __spreadValues({ id }, stats));
   }, [items]);
   return /* @__PURE__ */ jsxs5("div", { children: [
     /* @__PURE__ */ jsxs5("div", { style: { marginBottom: 20 }, children: [
