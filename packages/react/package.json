@@ -1,0 +1,43 @@
+{
+  "name": "@returnguard/react",
+  "version": "0.1.0",
+  "private": true,
+  "description": "React components and hooks for ReturnGuard payment fraud operations",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./styles.css": "./dist/styles.css"
+  },
+  "scripts": {
+    "build": "tsup && node -e \"fs.copyFileSync('src/styles.css', 'dist/styles.css')\"",
+    "test": "vitest run",
+    "lint": "oxlint"
+  },
+  "peerDependencies": {
+    "ag-grid-community": "^31.0.0 || ^32.0.0 || ^33.0.0 || ^34.0.0 || ^35.0.0 || ^36.0.0",
+    "ag-grid-react": "^31.0.0 || ^32.0.0 || ^33.0.0 || ^34.0.0 || ^35.0.0 || ^36.0.0",
+    "react": ">=16.14.0 || ^17.0.0 || ^18.0.0 || ^19.0.0",
+    "react-dom": ">=16.14.0 || ^17.0.0 || ^18.0.0 || ^19.0.0"
+  },
+  "dependencies": {
+    "@returnguard/sdk": "file:../sdk"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "ag-grid-community": "^36.2.0",
+    "ag-grid-react": "^36.2.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "tsup": "^8.3.6",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.5"
+  }
+}

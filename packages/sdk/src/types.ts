@@ -175,3 +175,105 @@ export interface DecisionAuditReconstruction {
   status: string;
   data: AuditReconstructionData;
 }
+
+
+export interface CustomerListItem {
+  customer_id: string;
+  email: string;
+  phone: string;
+  total_orders: number;
+  total_spent: number;
+  currency: string;
+  max_risk_score: number;
+  last_order_at?: string | null;
+  created_at: string;
+}
+
+export interface CustomerListParams {
+  cursor?: string;
+  limit?: number;
+}
+
+export interface CustomerListResponse {
+  items: CustomerListItem[];
+  next_cursor: string | null;
+  has_more: boolean;
+}
+
+export interface LinkedDeviceItem {
+  id: string;
+  device_hash: string;
+  ip_address?: string | null;
+  created_at: string;
+}
+
+export interface LinkedAddressItem {
+  id: string;
+  city: string;
+  state: string;
+  pincode: string;
+  country: string;
+  created_at: string;
+}
+
+export interface CustomerOrderSummary {
+  order_id: string;
+  order_value: number;
+  currency: string;
+  channel: string;
+  status: string;
+  order_time: string;
+  risk_score?: number | null;
+  policy_action?: string | null;
+}
+
+export interface CustomerProfileResponse {
+  customer_id: string;
+  email: string;
+  phone: string;
+  created_at: string;
+  total_orders: number;
+  total_spent: number;
+  currency: string;
+  max_risk_score: number;
+  average_risk_score: number;
+  linked_devices: LinkedDeviceItem[];
+  linked_addresses: LinkedAddressItem[];
+  order_history: CustomerOrderSummary[];
+}
+
+export interface DailyTrendItem {
+  date: string;
+  total_scored: number;
+  flagged: number;
+  blocked: number;
+}
+
+export interface ScoreDistribution {
+  low_0_15: number;
+  med_15_40: number;
+  high_40_80: number;
+  crit_80_100: number;
+}
+
+export interface ChannelBreakdown {
+  paypal: number;
+  cod: number;
+  other: number;
+}
+
+export interface DisputeAnalytics {
+  total_disputes: number;
+  disputed_amount: number;
+  currency: string;
+  dispute_rate_pct: number;
+}
+
+export interface RiskTrendsResponse {
+  tenant_id: string;
+  daily_trends: DailyTrendItem[];
+  score_distribution: ScoreDistribution;
+  channel_breakdown: ChannelBreakdown;
+  policy_breakdown: Record<string, number>;
+  dispute_analytics: DisputeAnalytics;
+}

@@ -117,14 +117,22 @@ class TenantScopedRepository:
     def get_decision(self, decision_id: str) -> Optional[AuditScoreEvent]:
         """Fetch decision record strictly within this merchant's scope.
 
+        Matches by decision_id, event id, or order_id strictly under tenant isolation.
         Returns None if decision belongs to another merchant or does not exist.
         """
+        from sqlalchemy import or_
+
         return (
             self.db.query(AuditScoreEvent)
             .filter(
-                AuditScoreEvent.decision_id == decision_id,
                 AuditScoreEvent.merchant_id == self.merchant_id,
+                or_(
+                    AuditScoreEvent.decision_id == decision_id,
+                    AuditScoreEvent.id == decision_id,
+                    AuditScoreEvent.order_id == decision_id,
+                ),
             )
+            .order_by(AuditScoreEvent.created_at.desc())
             .first()
         )
 

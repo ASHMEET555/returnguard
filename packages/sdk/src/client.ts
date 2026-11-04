@@ -6,6 +6,9 @@ import { ClientOptions } from "./auth";
 import { Transport } from "./transport";
 import {
   AnalyticsSummary,
+  CustomerListParams,
+  CustomerListResponse,
+  CustomerProfileResponse,
   DecisionAuditReconstruction,
   DecisionListParams,
   DecisionListResponse,
@@ -14,6 +17,7 @@ import {
   ReviewsListResponse,
   ReviewSubmitPayload,
   ReviewSubmitResult,
+  RiskTrendsResponse,
   ScorePayload,
   ScoreResult,
 } from "./types";
@@ -156,6 +160,48 @@ export class ReturnGuardClient {
       return this.transport.request<AnalyticsSummary>({
         method: "GET",
         path: "/v1/analytics/summary",
+      });
+    },
+
+    /**
+     * Retrieves risk trends, score distribution, and channel breakdowns.
+     * GET /v1/analytics/risk-trends. Retriable.
+     */
+    riskTrends: async (): Promise<RiskTrendsResponse> => {
+      return this.transport.request<RiskTrendsResponse>({
+        method: "GET",
+        path: "/v1/analytics/risk-trends",
+      });
+    },
+  };
+
+  /**
+   * Customer resource operations.
+   */
+  public readonly customers = {
+    /**
+     * Lists tenant customers with stable cursor pagination.
+     * GET /v1/customers. Retriable.
+     */
+    list: async (params?: CustomerListParams): Promise<CustomerListResponse> => {
+      const query: Record<string, string | number | undefined> = {};
+      if (params?.cursor) query.cursor = params.cursor;
+      if (params?.limit !== undefined) query.limit = params.limit;
+      return this.transport.request<CustomerListResponse>({
+        method: "GET",
+        path: "/v1/customers",
+        query,
+      });
+    },
+
+    /**
+     * Retrieves customer profile with linked devices, addresses, and order history.
+     * GET /v1/customers/{customer_id}. Retriable.
+     */
+    get: async (customerId: string): Promise<CustomerProfileResponse> => {
+      return this.transport.request<CustomerProfileResponse>({
+        method: "GET",
+        path: `/v1/customers/${encodeURIComponent(customerId)}`,
       });
     },
   };
