@@ -9,6 +9,10 @@ describe('@returnguard/react exports', () => {
     expect(ReactSDK.useRiskDecisions).toBeDefined();
     expect(ReactSDK.useTransactionRisk).toBeDefined();
     expect(ReactSDK.useModelPerformance).toBeDefined();
+    expect(ReactSDK.useRiskTrends).toBeDefined();
+    expect(ReactSDK.useCustomers).toBeDefined();
+    expect(ReactSDK.useCustomerProfile).toBeDefined();
+    expect(ReactSDK.useReviews).toBeDefined();
     expect(ReactSDK.RiskBadge).toBeDefined();
     expect(ReactSDK.DashboardShell).toBeDefined();
     expect(ReactSDK.OverviewPage).toBeDefined();
@@ -16,6 +20,12 @@ describe('@returnguard/react exports', () => {
     expect(ReactSDK.TransactionsPage).toBeDefined();
     expect(ReactSDK.DetailDrawer).toBeDefined();
     expect(ReactSDK.CustomersPage).toBeDefined();
+    expect(ReactSDK.RiskAnalyticsPage).toBeDefined();
+    expect(ReactSDK.RulesPage).toBeDefined();
+    expect(ReactSDK.ModelsPage).toBeDefined();
+    expect(ReactSDK.PaymentPipelinePage).toBeDefined();
+    expect(ReactSDK.ReviewsPage).toBeDefined();
+    expect(ReactSDK.ReportsPage).toBeDefined();
     expect(ReactSDK.ReturnGuardDashboard).toBeDefined();
   });
 });

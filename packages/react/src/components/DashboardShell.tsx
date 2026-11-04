@@ -20,9 +20,12 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
     { id: 'overview', label: 'Overview', icon: '📊' },
     { id: 'transactions', label: 'Transactions', icon: '💳' },
     { id: 'customers', label: 'Customers', icon: '👥' },
-    { id: 'analytics', label: 'Risk Analytics (M2)', icon: '📈', disabled: true },
-    { id: 'rules', label: 'Rules & Detection (M2)', icon: '🛡️', disabled: true },
-    { id: 'models', label: 'Model Benchmarks (M2)', icon: '🤖', disabled: true },
+    { id: 'analytics', label: 'Risk Analytics', icon: '📈' },
+    { id: 'rules', label: 'Rules & Detection', icon: '🛡️' },
+    { id: 'models', label: 'Model Benchmarks', icon: '🤖' },
+    { id: 'pipeline', label: 'Payment Pipeline', icon: '🔀' },
+    { id: 'reviews', label: 'Alerts & Reviews', icon: '🔔' },
+    { id: 'reports', label: 'Reports & Export', icon: '📄' },
   ];
 
   return (
@@ -41,9 +44,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
               key={item.id}
               type="button"
               className={`rg-nav-item ${currentTab === item.id ? 'active' : ''}`}
-              onClick={() => !item.disabled && onTabChange(item.id)}
-              disabled={item.disabled}
-              style={{ opacity: item.disabled ? 0.45 : 1 }}
+              onClick={() => onTabChange(item.id)}
             >
               <span>{item.icon}</span>
               <span>{item.label}</span>
@@ -95,7 +96,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
               </span>
               <span
                 style={{ fontSize: 10, color: 'var(--rg-med-text)', cursor: 'help' }}
-                title="Backend /v1/analytics/summary returns all-time scored decisions. Windowed time series filtering deferred to Milestone 2."
+                title="Backend /v1/analytics/summary returns all-time scored decisions."
               >
                 ⓘ Fixed
               </span>

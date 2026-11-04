@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from api.routes import (
     analytics,
     assistant,
+    customers,
     disputes,
     events,
     models,
@@ -27,6 +28,7 @@ app.include_router(auth_router)
 # Wire feature routers
 app.include_router(score.router)
 app.include_router(events.router)
+app.include_router(customers.router)
 app.include_router(reviews.router)
 app.include_router(analytics.router)
 app.include_router(models.router)

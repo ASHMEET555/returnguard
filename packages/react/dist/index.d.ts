@@ -1,5 +1,6 @@
 import React from 'react';
-import { ReturnGuardClient, ClientOptions, ModelPerformance, ScoreResult, AnalyticsSummary, DecisionAuditReconstruction } from '@returnguard/sdk';
+import * as _returnguard_sdk from '@returnguard/sdk';
+import { ReturnGuardClient, ClientOptions, CustomerProfileResponse, ModelPerformance, ScoreResult, AnalyticsSummary, RiskTrendsResponse, DecisionAuditReconstruction } from '@returnguard/sdk';
 
 interface ReturnGuardContextValue {
     client: ReturnGuardClient;
@@ -26,6 +27,12 @@ declare function useRiskSummary(): {
     error: Error | null;
     refetch: () => Promise<void>;
 };
+declare function useRiskTrends(): {
+    data: RiskTrendsResponse | null;
+    loading: boolean;
+    error: Error | null;
+    refetch: () => Promise<void>;
+};
 declare function useRiskDecisions(limit?: number): {
     items: ScoreResult[];
     nextCursor: string | null | undefined;
@@ -41,6 +48,26 @@ declare function useTransactionRisk(decisionId: string | null): {
     audit: DecisionAuditReconstruction | null;
     loading: boolean;
     error: Error | null;
+};
+declare function useCustomers(limit?: number): {
+    items: _returnguard_sdk.CustomerListItem[];
+    nextCursor: string | null | undefined;
+    hasMore: boolean;
+    loading: boolean;
+    error: Error | null;
+    nextPage: () => void;
+    refetch: () => Promise<void>;
+};
+declare function useCustomerProfile(customerId: string | null): {
+    profile: CustomerProfileResponse | null;
+    loading: boolean;
+    error: Error | null;
+};
+declare function useReviews(limit?: number): {
+    items: _returnguard_sdk.ReviewItem[];
+    loading: boolean;
+    error: Error | null;
+    refetch: () => Promise<void>;
 };
 declare function useModelPerformance(): {
     data: ModelPerformance | null;
@@ -84,10 +111,22 @@ declare const DetailDrawer: React.FC<DetailDrawerProps>;
 
 declare const CustomersPage: React.FC;
 
+declare const RiskAnalyticsPage: React.FC;
+
+declare const RulesPage: React.FC;
+
+declare const ModelsPage: React.FC;
+
+declare const PaymentPipelinePage: React.FC;
+
+declare const ReviewsPage: React.FC;
+
+declare const ReportsPage: React.FC;
+
 interface ReturnGuardDashboardProps {
     initialTab?: string;
     brandTitle?: string;
 }
 declare const ReturnGuardDashboard: React.FC<ReturnGuardDashboardProps>;
 
-export { CustomersPage, DashboardShell, DetailDrawer, OverviewPage, type ReturnGuardContextValue, ReturnGuardDashboard, ReturnGuardProvider, type ReturnGuardProviderProps, RiskBadge, TransactionsGrid, TransactionsPage, useModelPerformance, useReturnGuard, useRiskDecisions, useRiskSummary, useTransactionRisk };
+export { CustomersPage, DashboardShell, DetailDrawer, ModelsPage, OverviewPage, PaymentPipelinePage, ReportsPage, type ReturnGuardContextValue, ReturnGuardDashboard, ReturnGuardProvider, type ReturnGuardProviderProps, ReviewsPage, RiskAnalyticsPage, RiskBadge, RulesPage, TransactionsGrid, TransactionsPage, useCustomerProfile, useCustomers, useModelPerformance, useReturnGuard, useReviews, useRiskDecisions, useRiskSummary, useRiskTrends, useTransactionRisk };
