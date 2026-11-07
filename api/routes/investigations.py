@@ -15,6 +15,7 @@ from auth.embed_tokens import (
     require_read_or_review_auth,
 )
 from db.models import (
+    LLMRun,
     Dispute,
     EvidenceApproval,
     EvidencePack,
@@ -861,4 +862,106 @@ def get_investigation_timeline(
             }
             for s in steps
         ],
+    }
+
+
+@router.get("/{id}/assessment", status_code=status.HTTP_200_OK)
+def get_investigation_assessment(
+    id: str,
+    auth: AuthContext = Depends(require_read_or_review_auth),
+    db: Session = Depends(get_db),
+):
+    """
+    Returns LLM assessment visibility view:
+    - Model identifier
+    - Prompt hash
+    - Attempt count
+    - Each attempt's validator errors
+    - Final status (VALIDATED or TEMPLATE_FALLBACK)
+    - Final text
+    - Findings it cites
+    Always labelled advisory. Never returns private alias mapping or real IDs.
+    """
+    repo = TenantScopedRepository(db, auth.tenant_id)
+    inv = repo.get_investigation(id)
+    if not inv:
+        raise HTTPException(status_code=404, detail="Investigation not found")
+
+    # Fetch latest LLMRun
+    llm_run: Optional[LLMRun] = (
+        db.query(LLMRun)
+        .filter(
+            LLMRun.investigation_id == id,
+            LLMRun.merchant_id == auth.tenant_id,
+        )
+        .order_by(LLMRun.created_at.desc())
+        .first()
+    )
+
+    # Fetch latest EvidencePack for findings & final text
+    latest_pack: Optional[EvidencePack] = (
+        db.query(EvidencePack)
+        .filter(
+            EvidencePack.investigation_id == id,
+            EvidencePack.merchant_id == auth.tenant_id,
+        )
+        .order_by(EvidencePack.version.desc())
+        .first()
+    )
+
+    pack_json = latest_pack.pack_json if latest_pack else {}
+    findings_cited = pack_json.get("deterministic_findings", [])
+    narrative_obj = pack_json.get("investigation_narrative", {})
+
+    # Determine final status and attempt count
+    raw_status = llm_run.final_status if llm_run else "TEMPLATE_FALLBACK"
+    if "FALLBACK" in raw_status:
+        final_status = "TEMPLATE_FALLBACK"
+    else:
+        final_status = "VALIDATED"
+
+    # Attempt count and error extraction
+    attempt_count = 1
+    attempt_errors: List[Dict[str, Any]] = []
+    if llm_run and llm_run.validation_result:
+        vr = llm_run.validation_result
+        if "attempt_1_errors" in vr or "attempt_2_errors" in vr:
+            attempt_count = 2
+            attempt_errors.append(
+                {"attempt": 1, "errors": vr.get("attempt_1_errors", [])}
+            )
+            attempt_errors.append(
+                {"attempt": 2, "errors": vr.get("attempt_2_errors", [])}
+            )
+        elif "errors" in vr:
+            errs = vr.get("errors", [])
+            attempt_errors.append({"attempt": 1, "errors": errs})
+            if raw_status == "SUCCESS_AFTER_RETRY":
+                attempt_count = 2
+
+    # Narrative text summary
+    if isinstance(narrative_obj, dict):
+        final_text = narrative_obj.get("summary", "")
+        steps = narrative_obj.get("steps", [])
+        if steps:
+            final_text += " " + " ".join(
+                s.get("description", "") for s in steps if isinstance(s, dict)
+            )
+    elif isinstance(narrative_obj, str):
+        final_text = narrative_obj
+    else:
+        final_text = ""
+
+    return {
+        "investigation_id": id,
+        "advisory_label": "LLM assessment, advisory",
+        "disclaimer": "This assessment is generated for advisory and investigative review only. It does not alter risk probability, soft policy tier, or model scoring.",
+        "model_identifier": llm_run.model if llm_run else "deterministic_rules_v1",
+        "provider": llm_run.provider if llm_run else "template_fallback",
+        "prompt_hash": llm_run.prompt_hash if llm_run else "none",
+        "attempt_count": attempt_count,
+        "attempts": attempt_errors,
+        "final_status": final_status,
+        "final_text": final_text,
+        "findings_cited": findings_cited,
     }
