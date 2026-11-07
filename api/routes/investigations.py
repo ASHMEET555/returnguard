@@ -9,7 +9,11 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from auth.api_keys import get_api_key_merchant
-from auth.embed_tokens import AuthContext, require_evidence_approve_auth
+from auth.embed_tokens import (
+    AuthContext,
+    require_evidence_approve_auth,
+    require_read_or_review_auth,
+)
 from db.models import (
     Dispute,
     EvidenceApproval,
@@ -258,3 +262,172 @@ def record_submission_result(
         "submission_id": sub_res.id,
         "submission_key": sub_res.submission_key,
     }
+
+
+# Admin read surface endpoints for investigations
+
+
+@router.get("", status_code=status.HTTP_200_OK)
+def list_investigations(
+    status: Optional[str] = Query(None, description="Filter by investigation status"),
+    cursor: Optional[str] = Query(
+        None, description="Pagination cursor (created_at ISO)"
+    ),
+    limit: int = Query(50, ge=1, le=100),
+    auth: AuthContext = Depends(require_read_or_review_auth),
+    db: Session = Depends(get_db),
+):
+    """
+    List investigations for the authenticated tenant with cursor pagination and status filter.
+    Returns tenant-scoped investigations; cross-tenant query returns empty.
+    """
+    query = db.query(Investigation).filter(Investigation.merchant_id == auth.tenant_id)
+
+    if status:
+        query = query.filter(Investigation.status == status.upper())
+
+    if cursor:
+        try:
+            cursor_dt = datetime.datetime.fromisoformat(cursor)
+            query = query.filter(Investigation.created_at < cursor_dt)
+        except Exception:
+            pass
+
+    items = query.order_by(Investigation.created_at.desc()).limit(limit + 1).all()
+
+    has_more = len(items) > limit
+    results = items[:limit]
+    next_cursor = results[-1].created_at.isoformat() if has_more and results else None
+
+    return {
+        "items": [
+            {
+                "id": inv.id,
+                "dispute_id": inv.dispute_id,
+                "status": inv.status,
+                "created_at": inv.created_at.isoformat(),
+                "updated_at": inv.updated_at.isoformat(),
+                "case_hash": inv.case_hash,
+            }
+            for inv in results
+        ],
+        "next_cursor": next_cursor,
+        "has_more": has_more,
+    }
+
+
+@router.get("/{id}", status_code=status.HTTP_200_OK)
+def get_investigation_detail(
+    id: str,
+    auth: AuthContext = Depends(require_read_or_review_auth),
+    db: Session = Depends(get_db),
+):
+    """
+    Retrieve full investigation detail:
+    - Summary
+    - Findings
+    - Completeness
+    - Advisory LLM assessment (prominently labeled advisory)
+    - Decision record snapshot
+    - Approval status
+    """
+    repo = TenantScopedRepository(db, auth.tenant_id)
+    inv = repo.get_investigation(id)
+    if not inv:
+        raise HTTPException(status_code=404, detail="Investigation not found")
+
+    dispute: Optional[Dispute] = repo.get_dispute(inv.dispute_id)
+    if not dispute:
+        raise HTTPException(status_code=404, detail="Associated dispute not found")
+
+    # Latest pack
+    latest_pack: Optional[EvidencePack] = (
+        db.query(EvidencePack)
+        .filter(
+            EvidencePack.investigation_id == id,
+            EvidencePack.merchant_id == auth.tenant_id,
+        )
+        .order_by(EvidencePack.version.desc())
+        .first()
+    )
+
+    # Active approval
+    active_approval: Optional[EvidenceApproval] = (
+        db.query(EvidenceApproval)
+        .filter(
+            EvidenceApproval.investigation_id == id,
+            EvidenceApproval.merchant_id == auth.tenant_id,
+            EvidenceApproval.revoked_at.is_(None),
+        )
+        .order_by(EvidenceApproval.decided_at.desc())
+        .first()
+    )
+
+    pack_data = latest_pack.pack_json if latest_pack else {}
+
+    return {
+        "id": inv.id,
+        "dispute_id": inv.dispute_id,
+        "status": inv.status,
+        "created_at": inv.created_at.isoformat(),
+        "updated_at": inv.updated_at.isoformat(),
+        "case_hash": inv.case_hash,
+        "external_dispute_id": dispute.external_dispute_id,
+        "reason_code": dispute.reason_code,
+        "amount": float(dispute.amount),
+        "currency": dispute.currency,
+        "findings": pack_data.get("deterministic_findings", []),
+        "advisory_assessment": {
+            "disclaimer": "This assessment is generated for advisory and investigative review only. It does not alter risk probability, soft policy tier, or model scoring.",
+            "narrative": pack_data.get("investigation_narrative"),
+        },
+        "decision_record": pack_data.get("target_transaction", {}).get(
+            "decision_record"
+        ),
+        "approval": {
+            "is_approved": (
+                active_approval.decision == "APPROVE" if active_approval else False
+            ),
+            "decision": active_approval.decision if active_approval else "PENDING",
+            "approver_sub": active_approval.approver_sub if active_approval else None,
+            "decided_at": (
+                active_approval.decided_at.isoformat() if active_approval else None
+            ),
+            "pack_hash": active_approval.pack_hash if active_approval else None,
+        },
+    }
+
+
+@router.get("/{id}/pack", status_code=status.HTTP_200_OK)
+def get_investigation_pack(
+    id: str,
+    format: str = Query("json", pattern="^(json|md)$"),
+    auth: AuthContext = Depends(require_read_or_review_auth),
+    db: Session = Depends(get_db),
+):
+    """Return raw evidence pack in canonical json or markdown format."""
+    repo = TenantScopedRepository(db, auth.tenant_id)
+    inv = repo.get_investigation(id)
+    if not inv:
+        raise HTTPException(status_code=404, detail="Investigation not found")
+
+    latest_pack: Optional[EvidencePack] = (
+        db.query(EvidencePack)
+        .filter(
+            EvidencePack.investigation_id == id,
+            EvidencePack.merchant_id == auth.tenant_id,
+        )
+        .order_by(EvidencePack.version.desc())
+        .first()
+    )
+    if not latest_pack:
+        raise HTTPException(status_code=404, detail="Evidence pack not yet generated")
+
+    if format == "md":
+        from fastapi.responses import PlainTextResponse
+
+        return PlainTextResponse(
+            content=latest_pack.pack_md, media_type="text/markdown"
+        )
+
+    return latest_pack.pack_json
