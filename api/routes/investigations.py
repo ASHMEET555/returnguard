@@ -24,6 +24,24 @@ from db.models import (
 )
 from db.repositories.tenant_scoped import TenantScopedRepository
 from db.session import get_db
+from disputes.state_machine import (
+    ALL_STATES,
+    ALLOWED_TRANSITIONS,
+    CLOSED_STATES,
+    STATE_AWAITING_REVIEW,
+    STATE_CLOSED_APPROVED,
+    STATE_CLOSED_NO_ACTION,
+    STATE_CLOSED_REJECTED,
+    STATE_IN_REVIEW,
+    STATE_OPEN,
+    STATE_REOPENED,
+    InvalidCloseError,
+    InvalidReopenError,
+    InvalidStateTransitionError,
+    validate_close_requirements,
+    validate_reopen_requirements,
+    validate_transition,
+)
 
 router = APIRouter(prefix="/v1/investigations", tags=["investigations"])
 
@@ -36,6 +54,24 @@ class ApproveRequest(BaseModel):
 
 class RejectRequest(BaseModel):
     reason: str
+
+
+class TransitionStatusRequest(BaseModel):
+    target_status: str
+
+
+class CloseInvestigationRequest(BaseModel):
+    outcome: str = Field(
+        ..., description="CLOSED_APPROVED, CLOSED_REJECTED, or CLOSED_NO_ACTION"
+    )
+    note: str = Field(..., description="Closing note, minimum 20 characters")
+    steps_performed: List[str] = Field(
+        default_factory=list, description="List of recorded steps performed"
+    )
+
+
+class ReopenInvestigationRequest(BaseModel):
+    reason: str = Field(..., description="Reason for reopening the closed case")
 
 
 class SubmissionResultRequest(BaseModel):
@@ -431,3 +467,146 @@ def get_investigation_pack(
         )
 
     return latest_pack.pack_json
+
+
+@router.post("/{id}/transition", status_code=status.HTTP_200_OK)
+def transition_investigation_status(
+    id: str,
+    payload: TransitionStatusRequest,
+    auth: AuthContext = Depends(require_evidence_approve_auth),
+    db: Session = Depends(get_db),
+):
+    """
+    Transition investigation status according to reviewer state machine.
+    Disallowed transition raises 409 Conflict.
+    """
+    repo = TenantScopedRepository(db, auth.tenant_id)
+    inv = repo.get_investigation(id)
+    if not inv:
+        raise HTTPException(status_code=404, detail="Investigation not found")
+
+    target = payload.target_status.upper()
+    try:
+        validate_transition(inv.status, target)
+    except InvalidStateTransitionError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+
+    inv.status = target
+    db.commit()
+
+    return {
+        "status": "success",
+        "investigation_id": id,
+        "previous_status": inv.status,
+        "current_status": target,
+    }
+
+
+@router.post("/{id}/close", status_code=status.HTTP_200_OK)
+def close_investigation(
+    id: str,
+    payload: CloseInvestigationRequest,
+    auth: AuthContext = Depends(require_evidence_approve_auth),
+    db: Session = Depends(get_db),
+):
+    """
+    Close an investigation.
+    Requires:
+    - Outcome is CLOSED_APPROVED, CLOSED_REJECTED, or CLOSED_NO_ACTION.
+    - Note of at least 20 characters.
+    - At least one recorded step in steps_performed (or step log).
+    - If outcome is CLOSED_APPROVED, requires a current, matching evidence approval.
+    """
+    repo = TenantScopedRepository(db, auth.tenant_id)
+    inv = repo.get_investigation(id)
+    if not inv:
+        raise HTTPException(status_code=404, detail="Investigation not found")
+
+    outcome = payload.outcome.upper()
+
+    # Check state transition from current status
+    try:
+        validate_transition(inv.status, outcome)
+    except InvalidStateTransitionError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+
+    # Check for active approval if closing as approved
+    active_approval = (
+        db.query(EvidenceApproval)
+        .filter(
+            EvidenceApproval.investigation_id == id,
+            EvidenceApproval.merchant_id == auth.tenant_id,
+            EvidenceApproval.decision == "APPROVE",
+            EvidenceApproval.revoked_at.is_(None),
+        )
+        .order_by(EvidenceApproval.decided_at.desc())
+        .first()
+    )
+    has_approval = active_approval is not None
+
+    has_steps = len(payload.steps_performed) > 0
+    try:
+        validate_close_requirements(
+            outcome=outcome,
+            note=payload.note,
+            has_recorded_steps=has_steps,
+            has_active_approval=has_approval,
+        )
+    except InvalidCloseError as e:
+        # Note length or missing steps validation error -> 422 Unprocessable Entity
+        msg = str(e)
+        if "at least 20 characters" in msg or "at least one recorded step" in msg:
+            raise HTTPException(status_code=422, detail=msg)
+        # Approval missing or disallowed outcome -> 409 Conflict
+        raise HTTPException(status_code=409, detail=msg)
+
+    inv.status = outcome
+    db.commit()
+
+    return {
+        "status": "success",
+        "investigation_id": id,
+        "outcome": outcome,
+        "note": payload.note,
+        "closed_by": auth.sub,
+    }
+
+
+@router.post("/{id}/reopen", status_code=status.HTTP_200_OK)
+def reopen_investigation(
+    id: str,
+    payload: ReopenInvestigationRequest,
+    auth: AuthContext = Depends(require_evidence_approve_auth),
+    db: Session = Depends(get_db),
+):
+    """
+    Reopen a closed investigation.
+    Requires:
+    - Current status must be one of CLOSED_*
+    - Non-empty reason string
+    """
+    repo = TenantScopedRepository(db, auth.tenant_id)
+    inv = repo.get_investigation(id)
+    if not inv:
+        raise HTTPException(status_code=404, detail="Investigation not found")
+
+    try:
+        validate_transition(inv.status, STATE_REOPENED)
+    except InvalidStateTransitionError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+
+    try:
+        validate_reopen_requirements(payload.reason)
+    except InvalidReopenError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    inv.status = STATE_REOPENED
+    db.commit()
+
+    return {
+        "status": "success",
+        "investigation_id": id,
+        "current_status": STATE_REOPENED,
+        "reason": payload.reason,
+        "reopened_by": auth.sub,
+    }
