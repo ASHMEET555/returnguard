@@ -24,10 +24,14 @@ from db.models import (
 )
 from db.repositories.tenant_scoped import TenantScopedRepository
 from db.session import get_db
+from disputes.completeness import check_completeness
 from disputes.step_logger import (
     STEP_CASE_CLOSED,
     STEP_CASE_OPENED,
     STEP_CASE_REOPENED,
+    STEP_CASE_VIEWED,
+    STEP_DOCUMENTS_REQUESTED,
+    STEP_NOTE_ADDED,
     STEP_PACK_APPROVED,
     STEP_PACK_REJECTED,
     STEP_STATUS_CHANGED,
@@ -77,6 +81,10 @@ class CloseInvestigationRequest(BaseModel):
     steps_performed: List[str] = Field(
         default_factory=list, description="List of recorded steps performed"
     )
+
+
+class AddNoteRequest(BaseModel):
+    note: str = Field(..., min_length=1, description="Reviewer note content")
 
 
 class ReopenInvestigationRequest(BaseModel):
@@ -673,4 +681,184 @@ def reopen_investigation(
         "current_status": STATE_REOPENED,
         "reason": payload.reason,
         "reopened_by": auth.sub,
+    }
+
+
+@router.post("/{id}/start-review", status_code=status.HTTP_200_OK)
+def start_review(
+    id: str,
+    auth: AuthContext = Depends(require_evidence_approve_auth),
+    db: Session = Depends(get_db),
+):
+    """
+    Reviewer starts investigation review: transitions OPEN to IN_REVIEW.
+    Requires embed token with evidence:approve scope.
+    """
+    repo = TenantScopedRepository(db, auth.tenant_id)
+    inv = repo.get_investigation(id)
+    if not inv:
+        raise HTTPException(status_code=404, detail="Investigation not found")
+
+    try:
+        validate_transition(inv.status, STATE_IN_REVIEW)
+    except InvalidStateTransitionError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+
+    previous = inv.status
+    inv.status = STATE_IN_REVIEW
+    record_step(
+        db=db,
+        merchant_id=auth.tenant_id,
+        investigation_id=id,
+        step_type=STEP_STATUS_CHANGED,
+        actor=auth.sub,
+        actor_type="reviewer",
+        note=f"Reviewer {auth.sub} started review (transitioned from {previous} to IN_REVIEW)",
+    )
+    db.commit()
+
+    return {
+        "status": "success",
+        "investigation_id": id,
+        "previous_status": previous,
+        "current_status": STATE_IN_REVIEW,
+        "reviewer": auth.sub,
+    }
+
+
+@router.post("/{id}/notes", status_code=status.HTTP_200_OK)
+def add_note(
+    id: str,
+    payload: AddNoteRequest,
+    auth: AuthContext = Depends(require_evidence_approve_auth),
+    db: Session = Depends(get_db),
+):
+    """
+    Reviewer adds a note to the investigation: records a NOTE_ADDED step.
+    """
+    repo = TenantScopedRepository(db, auth.tenant_id)
+    inv = repo.get_investigation(id)
+    if not inv:
+        raise HTTPException(status_code=404, detail="Investigation not found")
+
+    step = record_step(
+        db=db,
+        merchant_id=auth.tenant_id,
+        investigation_id=id,
+        step_type=STEP_NOTE_ADDED,
+        actor=auth.sub,
+        actor_type="reviewer",
+        note=payload.note,
+    )
+    db.commit()
+
+    return {
+        "status": "success",
+        "investigation_id": id,
+        "step_id": step.id,
+        "note": payload.note,
+        "actor": auth.sub,
+    }
+
+
+@router.post("/{id}/request-documents", status_code=status.HTTP_200_OK)
+def request_documents(
+    id: str,
+    auth: AuthContext = Depends(require_evidence_approve_auth),
+    db: Session = Depends(get_db),
+):
+    """
+    Records DOCUMENTS_REQUESTED with the missing evidence types from the completeness check.
+    """
+    repo = TenantScopedRepository(db, auth.tenant_id)
+    inv = repo.get_investigation(id)
+    if not inv:
+        raise HTTPException(status_code=404, detail="Investigation not found")
+
+    # Evaluate completeness
+    missing_kinds: List[str] = []
+    if inv.dispute_id:
+        dispute = repo.get_dispute(inv.dispute_id)
+        if dispute:
+            from db.models import DisputeDocument
+
+            docs = (
+                db.query(DisputeDocument)
+                .filter(
+                    DisputeDocument.dispute_id == dispute.id,
+                    DisputeDocument.merchant_id == auth.tenant_id,
+                )
+                .all()
+            )
+            present_types = [d.evidence_type for d in docs]
+            comp = check_completeness(dispute.reason_code, present_types)
+            missing_kinds = comp.get("missing_kinds", [])
+
+    step_note = (
+        f"Missing evidence types requested: {', '.join(missing_kinds)}"
+        if missing_kinds
+        else "Evidence types requested"
+    )
+
+    step = record_step(
+        db=db,
+        merchant_id=auth.tenant_id,
+        investigation_id=id,
+        step_type=STEP_DOCUMENTS_REQUESTED,
+        actor=auth.sub,
+        actor_type="reviewer",
+        note=step_note,
+    )
+    db.commit()
+
+    return {
+        "status": "success",
+        "investigation_id": id,
+        "step_id": step.id,
+        "missing_evidence_types": missing_kinds,
+    }
+
+
+@router.get("/{id}/timeline", status_code=status.HTTP_200_OK)
+def get_investigation_timeline(
+    id: str,
+    auth: AuthContext = Depends(require_evidence_approve_auth),
+    db: Session = Depends(get_db),
+):
+    """
+    Returns ordered steps with actor and time for an investigation.
+    Requires embed token with evidence:approve scope. Server keys return 403.
+    """
+    repo = TenantScopedRepository(db, auth.tenant_id)
+    inv = repo.get_investigation(id)
+    if not inv:
+        raise HTTPException(status_code=404, detail="Investigation not found")
+
+    from db.models import InvestigationStep
+
+    steps = (
+        db.query(InvestigationStep)
+        .filter(
+            InvestigationStep.investigation_id == id,
+            InvestigationStep.merchant_id == auth.tenant_id,
+        )
+        .order_by(InvestigationStep.created_at.asc(), InvestigationStep.id.asc())
+        .all()
+    )
+
+    return {
+        "investigation_id": id,
+        "total_steps": len(steps),
+        "steps": [
+            {
+                "id": s.id,
+                "step_type": s.step_type,
+                "actor": s.actor,
+                "actor_type": s.actor_type,
+                "note": s.note,
+                "pack_hash": s.pack_hash,
+                "created_at": s.created_at.isoformat(),
+            }
+            for s in steps
+        ],
     }
