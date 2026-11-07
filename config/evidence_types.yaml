@@ -1,0 +1,116 @@
+# Evidence Types & Document Kinds Configuration (Phase I)
+# Every PayPal-facing name is explicitly marked UNVERIFIED with the required sandbox verification check.
+
+evidence_types:
+  MERCHANDISE_OR_SERVICE_NOT_RECEIVED:
+    name: "Item Not Received (INR)"
+    paypal_reason_name: "MERCHANDISE_OR_SERVICE_NOT_RECEIVED"  # UNVERIFIED: verify against PayPal Disputes API v1 reason enum in sandbox
+    description: "Buyer claimed merchandise or service was not received."
+    required_kinds:
+      - PROOF_OF_DELIVERY
+      - TRACKING_INFORMATION
+    optional_kinds:
+      - CUSTOMER_COMMUNICATION
+      - REFUND_POLICY
+      - TERMS_OF_SERVICE
+
+  UNAUTHORISED:
+    name: "Unauthorized Transaction"
+    paypal_reason_name: "UNAUTHORISED"  # UNVERIFIED: verify against PayPal Disputes API v1 reason enum in sandbox
+    description: "Cardholder or account holder claims transaction was not authorized by them."
+    required_kinds:
+      - TRANSACTION_RECEIPT
+      - DEVICE_FINGERPRINT_LOG
+    optional_kinds:
+      - PROOF_OF_DELIVERY
+      - PRIOR_ORDER_HISTORY
+      - CUSTOMER_COMMUNICATION
+
+  MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED:
+    name: "Significantly Not As Described (SNAD)"
+    paypal_reason_name: "MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED"  # UNVERIFIED: verify against PayPal Disputes API v1 reason enum in sandbox
+    description: "Buyer claims item received is defective, counterfeit, or differs significantly from listing."
+    required_kinds:
+      - ITEM_DESCRIPTION
+      - REFUND_POLICY
+    optional_kinds:
+      - CUSTOMER_COMMUNICATION
+      - PROOF_OF_DELIVERY
+      - RETURN_INSPECTION_RECORD
+
+  CANCELED_RECURRING_BILLING:
+    name: "Canceled Recurring Billing / Subscription"
+    paypal_reason_name: "CANCELED_RECURRING_BILLING"  # UNVERIFIED: verify against PayPal Disputes API v1 reason enum in sandbox
+    description: "Buyer claims recurring payment or recurring subscription was canceled prior to billing."
+    required_kinds:
+      - SUBSCRIPTION_AGREEMENT
+      - CANCELLATION_POLICY
+    optional_kinds:
+      - LOGIN_ACTIVITY_LOG
+      - CUSTOMER_COMMUNICATION
+
+  DEFAULT:
+    name: "Standard Dispute Evidence"
+    paypal_reason_name: "OTHER"  # UNVERIFIED: verify against PayPal Disputes API v1 reason enum in sandbox
+    description: "Default evidence checklist for general payment disputes."
+    required_kinds:
+      - TRANSACTION_RECEIPT
+      - PROOF_OF_DELIVERY
+    optional_kinds:
+      - CUSTOMER_COMMUNICATION
+      - TERMS_OF_SERVICE
+
+# Document Kind Registry with validation constraints
+document_kinds:
+  PROOF_OF_DELIVERY:
+    label: "Proof of Delivery"
+    description: "Courier tracking receipt, carrier signature document, or delivery confirmation log."
+    paypal_evidence_type: "PROOF_OF_DELIVERY"  # UNVERIFIED: verify PayPal document submission type enum in sandbox
+  TRACKING_INFORMATION:
+    label: "Carrier Tracking Details"
+    description: "Shipment carrier tracking code, carrier name, dispatch date, and destination city."
+    paypal_evidence_type: "TRACKING_INFORMATION"  # UNVERIFIED: verify PayPal document submission type enum in sandbox
+  TRANSACTION_RECEIPT:
+    label: "Transaction Receipt / Order Invoice"
+    description: "Itemized invoice showing order items, amounts, billing address, and transaction timestamp."
+    paypal_evidence_type: "SALES_RECEIPT"  # UNVERIFIED: verify PayPal document submission type enum in sandbox
+  DEVICE_FINGERPRINT_LOG:
+    label: "Device & Session Security Log"
+    description: "Device hash, IP address geolocation, and browser agent audit trace at authorization time."
+    paypal_evidence_type: "OTHER"  # UNVERIFIED: verify PayPal document submission type enum in sandbox
+  CUSTOMER_COMMUNICATION:
+    label: "Customer Communication Records"
+    description: "Customer service chat logs, support tickets, emails, or SMS interactions."
+    paypal_evidence_type: "CUSTOMER_COMMUNICATION"  # UNVERIFIED: verify PayPal document submission type enum in sandbox
+  REFUND_POLICY:
+    label: "Merchant Refund Policy"
+    description: "Terms and conditions regarding returns, refund windows, and cancellation rules."
+    paypal_evidence_type: "RETURN_POLICY"  # UNVERIFIED: verify PayPal document submission type enum in sandbox
+  TERMS_OF_SERVICE:
+    label: "Terms of Service"
+    description: "Merchant terms of service accepted by customer during checkout."
+    paypal_evidence_type: "TERMS_AND_CONDITIONS"  # UNVERIFIED: verify PayPal document submission type enum in sandbox
+  ITEM_DESCRIPTION:
+    label: "Item Product Listing & Description"
+    description: "Product page screenshot, technical specifications, and condition description."
+    paypal_evidence_type: "ITEM_DESCRIPTION"  # UNVERIFIED: verify PayPal document submission type enum in sandbox
+  RETURN_INSPECTION_RECORD:
+    label: "Return Inspection Report"
+    description: "Warehouse inspection log detailing condition of returned physical items."
+    paypal_evidence_type: "PROOF_OF_RETURN"  # UNVERIFIED: verify PayPal document submission type enum in sandbox
+  SUBSCRIPTION_AGREEMENT:
+    label: "Recurring Subscription Contract"
+    description: "Signed terms for recurring billing and billing interval."
+    paypal_evidence_type: "RECURRING_SERVICES_AGREEMENT"  # UNVERIFIED: verify PayPal document submission type enum in sandbox
+  CANCELLATION_POLICY:
+    label: "Cancellation Policy"
+    description: "Rules regarding subscription cancellation notice windows."
+    paypal_evidence_type: "CANCELATION_POLICY"  # UNVERIFIED: verify PayPal document submission type enum in sandbox
+  LOGIN_ACTIVITY_LOG:
+    label: "Account Access / Login Log"
+    description: "Timestamped account authentication history showing ongoing service usage."
+    paypal_evidence_type: "OTHER"  # UNVERIFIED: verify PayPal document submission type enum in sandbox
+  PRIOR_ORDER_HISTORY:
+    label: "Prior Undisputed Order History"
+    description: "History of previously successful, undisputed orders by the same customer."
+    paypal_evidence_type: "OTHER"  # UNVERIFIED: verify PayPal document submission type enum in sandbox
