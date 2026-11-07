@@ -18,6 +18,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
 
   const navItems = [
     { id: 'overview', label: 'Overview', icon: '📊' },
+    { id: 'investigations', label: 'Investigations', icon: '🔍' },
     { id: 'transactions', label: 'Transactions', icon: '💳' },
     { id: 'customers', label: 'Customers', icon: '👥' },
     { id: 'analytics', label: 'Risk Analytics', icon: '📈' },
@@ -98,12 +99,13 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
                 style={{ fontSize: 10, color: 'var(--rg-med-text)', cursor: 'help' }}
                 title="Backend /v1/analytics/summary returns all-time scored decisions."
               >
-                ⓘ Fixed
+                ⓘ Lifetime
               </span>
             </div>
 
             <button
               type="button"
+              className="rg-theme-toggle"
               onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
               style={{
                 background: 'var(--rg-bg-card)',

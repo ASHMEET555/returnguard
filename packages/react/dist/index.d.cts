@@ -1,6 +1,6 @@
 import React from 'react';
 import * as _returnguard_sdk from '@returnguard/sdk';
-import { ReturnGuardClient, ClientOptions, CustomerProfileResponse, ModelPerformance, ScoreResult, AnalyticsSummary, RiskTrendsResponse, DecisionAuditReconstruction } from '@returnguard/sdk';
+import { ReturnGuardClient, ClientOptions, CustomerProfileResponse, ModelPerformance, ScoreResult, AnalyticsSummary, RiskTrendsResponse, DecisionAuditReconstruction, InvestigationDetail, InvestigationAssessment, InvestigationTimelineStep, InvestigationListItem } from '@returnguard/sdk';
 
 interface ReturnGuardContextValue {
     client: ReturnGuardClient;
@@ -93,6 +93,17 @@ declare const DashboardShell: React.FC<DashboardShellProps>;
 
 declare const OverviewPage: React.FC;
 
+interface InvestigationsPageProps {
+    initialInvestigationId?: string;
+    onSelectInvestigation?: (id: string | null) => void;
+    testDetail?: InvestigationDetail | null;
+    testAssessment?: InvestigationAssessment | null;
+    testTimeline?: InvestigationTimelineStep[] | null;
+    testItems?: InvestigationListItem[] | null;
+    onActionTrigger?: (action: string, payload?: any) => void;
+}
+declare const InvestigationsPage: React.FC<InvestigationsPageProps>;
+
 interface TransactionsGridProps {
     items: ScoreResult[];
     loading?: boolean;
@@ -129,4 +140,4 @@ interface ReturnGuardDashboardProps {
 }
 declare const ReturnGuardDashboard: React.FC<ReturnGuardDashboardProps>;
 
-export { CustomersPage, DashboardShell, DetailDrawer, ModelsPage, OverviewPage, PaymentPipelinePage, ReportsPage, type ReturnGuardContextValue, ReturnGuardDashboard, ReturnGuardProvider, type ReturnGuardProviderProps, ReviewsPage, RiskAnalyticsPage, RiskBadge, RulesPage, TransactionsGrid, TransactionsPage, useCustomerProfile, useCustomers, useModelPerformance, useReturnGuard, useReviews, useRiskDecisions, useRiskSummary, useRiskTrends, useTransactionRisk };
+export { CustomersPage, DashboardShell, DetailDrawer, InvestigationsPage, ModelsPage, OverviewPage, PaymentPipelinePage, ReportsPage, type ReturnGuardContextValue, ReturnGuardDashboard, ReturnGuardProvider, type ReturnGuardProviderProps, ReviewsPage, RiskAnalyticsPage, RiskBadge, RulesPage, TransactionsGrid, TransactionsPage, useCustomerProfile, useCustomers, useModelPerformance, useReturnGuard, useReviews, useRiskDecisions, useRiskSummary, useRiskTrends, useTransactionRisk };

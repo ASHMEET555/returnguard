@@ -18,6 +18,7 @@ export {
 export { RiskBadge } from './components/RiskBadge';
 export { DashboardShell } from './components/DashboardShell';
 export { OverviewPage } from './components/OverviewPage';
+export { InvestigationsPage } from './components/InvestigationsPage';
 export { TransactionsGrid } from './components/TransactionsGrid';
 export { TransactionsPage } from './components/TransactionsPage';
 export { DetailDrawer } from './components/DetailDrawer';
