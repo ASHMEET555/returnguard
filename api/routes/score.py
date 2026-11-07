@@ -206,6 +206,16 @@ def score_transaction(
                         status="OPEN",
                     )
                     separate_db.add(new_inv)
+                    from disputes.step_logger import record_step, STEP_CASE_OPENED
+                    record_step(
+                        db=separate_db,
+                        merchant_id=auth_merchant_id,
+                        investigation_id=new_inv.id,
+                        step_type=STEP_CASE_OPENED,
+                        actor="system",
+                        actor_type="system",
+                        note=f"Case automatically opened for critical risk decision (action: {result.get('policy_action')}, severity: {result.get('severity')})",
+                    )
                     separate_db.commit()
             except Exception:
                 separate_db.rollback()

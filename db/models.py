@@ -404,6 +404,38 @@ class Investigation(Base):
     submission_results = relationship(
         "SubmissionResult", back_populates="investigation", cascade="all, delete-orphan"
     )
+    steps = relationship(
+        "InvestigationStep",
+        back_populates="investigation",
+        cascade="all, delete-orphan",
+        order_by="InvestigationStep.created_at.asc(), InvestigationStep.id.asc()",
+    )
+
+
+class InvestigationStep(Base):
+    """Append-only audit step log for an investigation."""
+
+    __tablename__ = "investigation_steps"
+
+    id = Column(String(64), primary_key=True)
+    merchant_id = Column(
+        String(64), ForeignKey("merchants.id"), nullable=False, index=True
+    )
+    investigation_id = Column(
+        String(64), ForeignKey("investigations.id"), nullable=False, index=True
+    )
+    step_type = Column(String(64), nullable=False)
+    actor = Column(String(128), nullable=False)  # embed-token sub or "system"
+    actor_type = Column(String(32), nullable=False)  # "reviewer", "system"
+    note = Column(Text, nullable=True)
+    pack_hash = Column(String(64), nullable=True)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.UTC),
+        nullable=False,
+    )
+
+    investigation = relationship("Investigation", back_populates="steps")
 
 
 class InvestigationFinding(Base):

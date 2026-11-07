@@ -24,6 +24,15 @@ from db.models import (
 )
 from db.repositories.tenant_scoped import TenantScopedRepository
 from db.session import get_db
+from disputes.step_logger import (
+    STEP_CASE_CLOSED,
+    STEP_CASE_OPENED,
+    STEP_CASE_REOPENED,
+    STEP_PACK_APPROVED,
+    STEP_PACK_REJECTED,
+    STEP_STATUS_CHANGED,
+    record_step,
+)
 from disputes.state_machine import (
     ALL_STATES,
     ALLOWED_TRANSITIONS,
@@ -130,7 +139,21 @@ def approve_investigation(
         reason=payload.reason,
     )
     db.add(approval)
-    inv.status = "APPROVED" if payload.decision.upper() == "APPROVE" else "REJECTED"
+    step_type_to_record = (
+        STEP_PACK_APPROVED
+        if payload.decision.upper() == "APPROVE"
+        else STEP_PACK_REJECTED
+    )
+    record_step(
+        db=db,
+        merchant_id=auth.tenant_id,
+        investigation_id=id,
+        step_type=step_type_to_record,
+        actor=auth.sub,
+        actor_type="reviewer",
+        note=payload.reason or f"Evidence pack {step_type_to_record.lower()}",
+        pack_hash=payload.pack_hash,
+    )
     db.commit()
 
     return {
@@ -177,7 +200,16 @@ def reject_investigation(
         reason=payload.reason,
     )
     db.add(approval)
-    inv.status = "REJECTED"
+    record_step(
+        db=db,
+        merchant_id=auth.tenant_id,
+        investigation_id=id,
+        step_type=STEP_PACK_REJECTED,
+        actor=auth.sub,
+        actor_type="reviewer",
+        note=payload.reason,
+        pack_hash=pack_hash,
+    )
     db.commit()
 
     return {
@@ -372,9 +404,9 @@ def get_investigation_detail(
     if not inv:
         raise HTTPException(status_code=404, detail="Investigation not found")
 
-    dispute: Optional[Dispute] = repo.get_dispute(inv.dispute_id)
-    if not dispute:
-        raise HTTPException(status_code=404, detail="Associated dispute not found")
+    dispute: Optional[Dispute] = (
+        repo.get_dispute(inv.dispute_id) if inv.dispute_id else None
+    )
 
     # Latest pack
     latest_pack: Optional[EvidencePack] = (
@@ -404,14 +436,18 @@ def get_investigation_detail(
     return {
         "id": inv.id,
         "dispute_id": inv.dispute_id,
+        "transaction_id": inv.transaction_id,
+        "decision_id": inv.decision_id,
         "status": inv.status,
         "created_at": inv.created_at.isoformat(),
         "updated_at": inv.updated_at.isoformat(),
         "case_hash": inv.case_hash,
-        "external_dispute_id": dispute.external_dispute_id,
-        "reason_code": dispute.reason_code,
-        "amount": float(dispute.amount),
-        "currency": dispute.currency,
+        "external_dispute_id": dispute.external_dispute_id if dispute else None,
+        "reason_code": (
+            dispute.reason_code if dispute else "CRITICAL_TRANSACTION_REVIEW"
+        ),
+        "amount": float(dispute.amount) if dispute else 0.0,
+        "currency": dispute.currency if dispute else "USD",
         "findings": pack_data.get("deterministic_findings", []),
         "advisory_assessment": {
             "disclaimer": "This assessment is generated for advisory and investigative review only. It does not alter risk probability, soft policy tier, or model scoring.",
@@ -491,7 +527,17 @@ def transition_investigation_status(
     except InvalidStateTransitionError as e:
         raise HTTPException(status_code=409, detail=str(e))
 
+    previous = inv.status
     inv.status = target
+    record_step(
+        db=db,
+        merchant_id=auth.tenant_id,
+        investigation_id=id,
+        step_type=STEP_STATUS_CHANGED,
+        actor=auth.sub,
+        actor_type="reviewer",
+        note=f"Status transitioned from {previous} to {target}",
+    )
     db.commit()
 
     return {
@@ -561,6 +607,15 @@ def close_investigation(
         raise HTTPException(status_code=409, detail=msg)
 
     inv.status = outcome
+    record_step(
+        db=db,
+        merchant_id=auth.tenant_id,
+        investigation_id=id,
+        step_type=STEP_CASE_CLOSED,
+        actor=auth.sub,
+        actor_type="reviewer",
+        note=f"Outcome: {outcome}. {payload.note}",
+    )
     db.commit()
 
     return {
@@ -601,6 +656,15 @@ def reopen_investigation(
         raise HTTPException(status_code=422, detail=str(e))
 
     inv.status = STATE_REOPENED
+    record_step(
+        db=db,
+        merchant_id=auth.tenant_id,
+        investigation_id=id,
+        step_type=STEP_CASE_REOPENED,
+        actor=auth.sub,
+        actor_type="reviewer",
+        note=payload.reason,
+    )
     db.commit()
 
     return {
