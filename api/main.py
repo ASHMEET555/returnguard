@@ -23,10 +23,19 @@ app = FastAPI(
     version="0.1.0",
 )
 
-# Enable CORS for frontend dashboard
+import os
+
+# Configure CORS origins from environment, defaulting to standard local dev ports
+# Note: Wildcard "*" cannot be used when allow_credentials=True
+cors_origins_env = os.environ.get(
+    "CORS_ALLOWED_ORIGINS",
+    "http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173",
+)
+allowed_origins = [o.strip() for o in cors_origins_env.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
