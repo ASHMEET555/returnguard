@@ -21,6 +21,7 @@ def run_migrations(target_engine=None):
 
     # 1. Create all registered tables if they do not exist
     import db.models  # ensure models are imported
+
     Base.metadata.create_all(bind=eng)
 
     # Re-inspect table names after create_all
@@ -33,7 +34,9 @@ def run_migrations(target_engine=None):
     with eng.connect() as conn:
         # Check audit_score_events table columns
         if "audit_score_events" in existing_tables:
-            columns = {col["name"] for col in inspector.get_columns("audit_score_events")}
+            columns = {
+                col["name"] for col in inspector.get_columns("audit_score_events")
+            }
 
             needed_cols = [
                 ("decision_id", "VARCHAR(64)"),
@@ -51,7 +54,11 @@ def run_migrations(target_engine=None):
             for col_name, col_type in needed_cols:
                 if col_name not in columns:
                     try:
-                        conn.execute(text(f"ALTER TABLE audit_score_events ADD COLUMN {col_name} {col_type};"))
+                        conn.execute(
+                            text(
+                                f"ALTER TABLE audit_score_events ADD COLUMN {col_name} {col_type};"
+                            )
+                        )
                         conn.commit()
                     except Exception:
                         pass
@@ -66,7 +73,13 @@ def run_migrations(target_engine=None):
             "refunds",
             "payment_events",
             "disputes",
+            "dispute_documents",
+            "investigations",
+            "investigation_findings",
+            "llm_runs",
             "evidence_packs",
+            "evidence_approvals",
+            "submission_results",
             "evidence_submissions",
         ]
 
@@ -75,17 +88,142 @@ def run_migrations(target_engine=None):
                 col_names = {col["name"] for col in inspector.get_columns(tbl)}
                 if "merchant_id" not in col_names:
                     try:
-                        conn.execute(text(f"ALTER TABLE {tbl} ADD COLUMN merchant_id VARCHAR(64);"))
+                        conn.execute(
+                            text(
+                                f"ALTER TABLE {tbl} ADD COLUMN merchant_id VARCHAR(64);"
+                            )
+                        )
                         conn.commit()
                     except Exception:
                         pass
+
+        # 3b. Schema evolution for Phase I dispute and investigation tables
+        if "disputes" in existing_tables:
+            disp_cols = {col["name"] for col in inspector.get_columns("disputes")}
+            disp_needed = [
+                ("external_dispute_id", "VARCHAR(128)"),
+                ("transaction_id", "VARCHAR(64)"),
+                ("reason_code", "VARCHAR(128)"),
+                ("opened_at", "DATETIME"),
+                ("received_at", "DATETIME"),
+            ]
+            for col_name, col_type in disp_needed:
+                if col_name not in disp_cols:
+                    try:
+                        conn.execute(
+                            text(
+                                f"ALTER TABLE disputes ADD COLUMN {col_name} {col_type};"
+                            )
+                        )
+                        conn.commit()
+                    except Exception:
+                        pass
+
+            # Backfill external_dispute_id and reason_code from legacy columns if present
+            try:
+                conn.execute(
+                    text(
+                        "UPDATE disputes SET external_dispute_id = paypal_dispute_id WHERE external_dispute_id IS NULL AND paypal_dispute_id IS NOT NULL;"
+                    )
+                )
+                conn.execute(
+                    text(
+                        "UPDATE disputes SET reason_code = reason WHERE reason_code IS NULL AND reason IS NOT NULL;"
+                    )
+                )
+                conn.commit()
+            except Exception:
+                pass
+
+            try:
+                conn.execute(
+                    text(
+                        "CREATE UNIQUE INDEX IF NOT EXISTS uq_disputes_merchant_external_id ON disputes (merchant_id, external_dispute_id);"
+                    )
+                )
+                conn.execute(
+                    text(
+                        "CREATE INDEX IF NOT EXISTS ix_disputes_merchant_id ON disputes (merchant_id);"
+                    )
+                )
+                conn.commit()
+            except Exception:
+                pass
+
+        # Ensure index on merchant_id for all Phase I tables
+        phase_i_tables = [
+            "dispute_documents",
+            "investigations",
+            "investigation_findings",
+            "llm_runs",
+            "evidence_packs",
+            "evidence_approvals",
+            "submission_results",
+        ]
+        for tbl in phase_i_tables:
+            if tbl in existing_tables:
+                try:
+                    conn.execute(
+                        text(
+                            f"CREATE INDEX IF NOT EXISTS ix_{tbl}_merchant_id ON {tbl} (merchant_id);"
+                        )
+                    )
+                    conn.commit()
+                except Exception:
+                    pass
+
+        # Unique constraint on submission_results.submission_key
+        if "submission_results" in existing_tables:
+            try:
+                conn.execute(
+                    text(
+                        "CREATE UNIQUE INDEX IF NOT EXISTS uq_submission_results_key ON submission_results (submission_key);"
+                    )
+                )
+                conn.commit()
+            except Exception:
+                pass
+
+        # Unique constraint on evidence_packs (investigation_id, version)
+        if "evidence_packs" in existing_tables:
+            ep_cols = {col["name"] for col in inspector.get_columns("evidence_packs")}
+            ep_needed = [
+                ("investigation_id", "VARCHAR(64)"),
+                ("version", "INTEGER DEFAULT 1"),
+                ("pack_json", "TEXT"),
+                ("pack_md", "TEXT"),
+            ]
+            for col_name, col_type in ep_needed:
+                if col_name not in ep_cols:
+                    try:
+                        conn.execute(
+                            text(
+                                f"ALTER TABLE evidence_packs ADD COLUMN {col_name} {col_type};"
+                            )
+                        )
+                        conn.commit()
+                    except Exception:
+                        pass
+            try:
+                conn.execute(
+                    text(
+                        "CREATE UNIQUE INDEX IF NOT EXISTS uq_evidence_packs_investigation_version ON evidence_packs (investigation_id, version);"
+                    )
+                )
+                conn.commit()
+            except Exception:
+                pass
 
         # 3b. Scope payment_events uniqueness to (merchant_id, event_id) and add order_reference
         if "payment_events" in existing_tables:
             pe_cols = {col["name"] for col in inspector.get_columns("payment_events")}
             if "order_reference" not in pe_cols:
                 try:
-                    conn.execute(text("ALTER TABLE payment_events ADD COLUMN order_reference VARCHAR(64);"))
+                    conn.execute(
+                        text(
+                            "ALTER TABLE payment_events ADD COLUMN order_reference VARCHAR(64);"
+                        )
+                    )
                     conn.commit()
                 except Exception:
                     pass
@@ -96,31 +234,46 @@ def run_migrations(target_engine=None):
                 for idx in pe_indexes
             )
             has_composite_unique = any(
-                idx.get("unique") and set(idx.get("column_names") or []) == {"merchant_id", "event_id"}
+                idx.get("unique")
+                and set(idx.get("column_names") or []) == {"merchant_id", "event_id"}
                 for idx in pe_indexes
             )
 
             if single_event_id_unique or not has_composite_unique:
                 try:
-                    conn.execute(text("DROP INDEX IF EXISTS ix_payment_events_event_id;"))
+                    conn.execute(
+                        text("DROP INDEX IF EXISTS ix_payment_events_event_id;")
+                    )
                     conn.commit()
                 except Exception:
                     pass
 
                 try:
-                    conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_events_merchant_event ON payment_events (merchant_id, event_id);"))
+                    conn.execute(
+                        text(
+                            "CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_events_merchant_event ON payment_events (merchant_id, event_id);"
+                        )
+                    )
                     conn.commit()
                 except Exception:
                     pass
 
                 try:
-                    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_payment_events_event_id ON payment_events (event_id);"))
+                    conn.execute(
+                        text(
+                            "CREATE INDEX IF NOT EXISTS ix_payment_events_event_id ON payment_events (event_id);"
+                        )
+                    )
                     conn.commit()
                 except Exception:
                     pass
 
                 try:
-                    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_payment_events_order_reference ON payment_events (order_reference);"))
+                    conn.execute(
+                        text(
+                            "CREATE INDEX IF NOT EXISTS ix_payment_events_order_reference ON payment_events (order_reference);"
+                        )
+                    )
                     conn.commit()
                 except Exception:
                     pass
@@ -128,12 +281,18 @@ def run_migrations(target_engine=None):
         # 4. Backfill existing rows with NULL merchant_id to 'merch_legacy' if any exist
         # Check if any table has rows where merchant_id IS NULL
         has_null_rows = False
-        all_scoped_tables = merchant_tables + ["audit_score_events", "customers", "orders"]
+        all_scoped_tables = merchant_tables + [
+            "audit_score_events",
+            "customers",
+            "orders",
+        ]
 
         for tbl in all_scoped_tables:
             if tbl in existing_tables:
                 try:
-                    res = conn.execute(text(f"SELECT COUNT(*) FROM {tbl} WHERE merchant_id IS NULL")).scalar()
+                    res = conn.execute(
+                        text(f"SELECT COUNT(*) FROM {tbl} WHERE merchant_id IS NULL")
+                    ).scalar()
                     if res and res > 0:
                         backfill_counts[tbl] = res
                         has_null_rows = True
@@ -167,7 +326,9 @@ def run_migrations(target_engine=None):
                 # Backfill nulls
                 for tbl in backfill_counts:
                     conn.execute(
-                        text(f"UPDATE {tbl} SET merchant_id = :mid WHERE merchant_id IS NULL"),
+                        text(
+                            f"UPDATE {tbl} SET merchant_id = :mid WHERE merchant_id IS NULL"
+                        ),
                         {"mid": LEGACY_MERCHANT_ID},
                     )
                     conn.commit()

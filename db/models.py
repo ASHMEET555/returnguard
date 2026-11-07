@@ -66,7 +66,9 @@ class Address(Base):
     __tablename__ = "addresses"
 
     id = Column(String(64), primary_key=True)
-    merchant_id = Column(String(64), ForeignKey("merchants.id"), nullable=True, index=True)
+    merchant_id = Column(
+        String(64), ForeignKey("merchants.id"), nullable=True, index=True
+    )
     customer_id = Column(String(64), ForeignKey("customers.id"), nullable=False)
     line1 = Column(String(255), nullable=False)
     locality = Column(String(255), nullable=True)
@@ -91,7 +93,9 @@ class Device(Base):
     __tablename__ = "devices"
 
     id = Column(String(64), primary_key=True)
-    merchant_id = Column(String(64), ForeignKey("merchants.id"), nullable=True, index=True)
+    merchant_id = Column(
+        String(64), ForeignKey("merchants.id"), nullable=True, index=True
+    )
     customer_id = Column(String(64), ForeignKey("customers.id"), nullable=False)
     device_hash = Column(String(128), nullable=False, index=True)
     ip_address = Column(String(45), nullable=True)
@@ -144,7 +148,9 @@ class Payment(Base):
 
     id = Column(String(64), primary_key=True)
     order_id = Column(String(64), ForeignKey("orders.id"), nullable=False)
-    merchant_id = Column(String(64), ForeignKey("merchants.id"), nullable=True, index=True)
+    merchant_id = Column(
+        String(64), ForeignKey("merchants.id"), nullable=True, index=True
+    )
     channel = Column(String(32), nullable=False)
     amount = Column(Numeric(12, 2), nullable=False)
     currency = Column(String(3), default="INR", nullable=False)
@@ -170,7 +176,9 @@ class Shipment(Base):
 
     id = Column(String(64), primary_key=True)
     order_id = Column(String(64), ForeignKey("orders.id"), nullable=False)
-    merchant_id = Column(String(64), ForeignKey("merchants.id"), nullable=True, index=True)
+    merchant_id = Column(
+        String(64), ForeignKey("merchants.id"), nullable=True, index=True
+    )
     carrier = Column(String(64), nullable=False)
     tracking_number = Column(String(128), nullable=False, index=True)
     status = Column(
@@ -195,7 +203,9 @@ class ReturnEvent(Base):
 
     id = Column(String(64), primary_key=True)
     order_id = Column(String(64), ForeignKey("orders.id"), nullable=False)
-    merchant_id = Column(String(64), ForeignKey("merchants.id"), nullable=True, index=True)
+    merchant_id = Column(
+        String(64), ForeignKey("merchants.id"), nullable=True, index=True
+    )
     reason = Column(String(128), nullable=False)
     status = Column(String(32), nullable=False)  # 'requested', 'received', 'inspected'
     received_at = Column(DateTime(timezone=True), nullable=True)
@@ -214,7 +224,9 @@ class Refund(Base):
     __tablename__ = "refunds"
 
     id = Column(String(64), primary_key=True)
-    merchant_id = Column(String(64), ForeignKey("merchants.id"), nullable=True, index=True)
+    merchant_id = Column(
+        String(64), ForeignKey("merchants.id"), nullable=True, index=True
+    )
     payment_id = Column(String(64), ForeignKey("payments.id"), nullable=False)
     amount = Column(Numeric(12, 2), nullable=False)
     currency = Column(String(3), default="INR", nullable=False)
@@ -234,11 +246,15 @@ class PaymentEvent(Base):
 
     __tablename__ = "payment_events"
     __table_args__ = (
-        UniqueConstraint("merchant_id", "event_id", name="uq_payment_events_merchant_event"),
+        UniqueConstraint(
+            "merchant_id", "event_id", name="uq_payment_events_merchant_event"
+        ),
     )
 
     id = Column(String(64), primary_key=True)
-    merchant_id = Column(String(64), ForeignKey("merchants.id"), nullable=False, index=True)
+    merchant_id = Column(
+        String(64), ForeignKey("merchants.id"), nullable=False, index=True
+    )
     event_id = Column(String(128), nullable=False, index=True)
     order_reference = Column(String(64), nullable=True, index=True)
     event_type = Column(String(128), nullable=False)
@@ -257,60 +273,288 @@ class Dispute(Base):
     """Payment dispute record from PayPal Disputes API."""
 
     __tablename__ = "disputes"
+    __table_args__ = (
+        UniqueConstraint(
+            "merchant_id",
+            "external_dispute_id",
+            name="uq_disputes_merchant_external_id",
+        ),
+    )
 
     id = Column(String(64), primary_key=True)
-    merchant_id = Column(String(64), ForeignKey("merchants.id"), nullable=True, index=True)
-    payment_id = Column(String(64), ForeignKey("payments.id"), nullable=False)
-    paypal_dispute_id = Column(String(128), unique=True, nullable=True, index=True)
-    reason = Column(String(128), nullable=False)
+    merchant_id = Column(
+        String(64), ForeignKey("merchants.id"), nullable=False, index=True
+    )
+    external_dispute_id = Column(String(128), nullable=False, index=True)
+    transaction_id = Column(
+        String(64), ForeignKey("orders.id"), nullable=True, index=True
+    )
+    payment_id = Column(
+        String(64), ForeignKey("payments.id"), nullable=True, index=True
+    )
+    reason_code = Column(String(128), nullable=False)
     status = Column(String(64), nullable=False)  # 'WAITING_FOR_SELLER_RESPONSE', etc.
     amount = Column(Numeric(12, 2), nullable=False)
     currency = Column(String(3), default="INR", nullable=False)
+    opened_at = Column(DateTime(timezone=True), nullable=True)
+    received_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.UTC),
+        nullable=False,
+    )
+    # Compatibility properties/columns for analytics and prior references
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.UTC),
+        nullable=False,
+    )
     evidences_requested_json = Column(Text, nullable=True)
     dispute_life_cycle_stage = Column(String(64), nullable=True)
+
+    @property
+    def paypal_dispute_id(self):
+        return self.external_dispute_id
+
+    @property
+    def reason(self):
+        return self.reason_code
+
+    payment = relationship("Payment")
+    documents = relationship(
+        "DisputeDocument", back_populates="dispute", cascade="all, delete-orphan"
+    )
+    investigations = relationship(
+        "Investigation", back_populates="dispute", cascade="all, delete-orphan"
+    )
+
+
+class DisputeDocument(Base):
+    """Document evidence associated with a dispute."""
+
+    __tablename__ = "dispute_documents"
+
+    id = Column(String(64), primary_key=True)
+    merchant_id = Column(
+        String(64), ForeignKey("merchants.id"), nullable=False, index=True
+    )
+    dispute_id = Column(
+        String(64), ForeignKey("disputes.id"), nullable=False, index=True
+    )
+    evidence_type = Column(String(64), nullable=False)  # e.g. PROOF_OF_DELIVERY
+    filename = Column(String(255), nullable=False)
+    text_content = Column(Text, nullable=False)  # capped at 1 MB
+    sha256 = Column(String(64), nullable=False)
+    byte_size = Column(Integer, nullable=False)
+    received_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.UTC),
+        nullable=False,
+    )
+
+    dispute = relationship("Dispute", back_populates="documents")
+
+
+class Investigation(Base):
+    """Investigation case container for a disputed transaction."""
+
+    __tablename__ = "investigations"
+
+    id = Column(String(64), primary_key=True)
+    merchant_id = Column(
+        String(64), ForeignKey("merchants.id"), nullable=False, index=True
+    )
+    dispute_id = Column(
+        String(64), ForeignKey("disputes.id"), nullable=False, index=True
+    )
+    status = Column(
+        String(32), default="OPEN", nullable=False
+    )  # 'OPEN', 'PENDING_APPROVAL', 'APPROVED', 'REJECTED', 'SUBMITTED'
+    case_hash = Column(String(64), nullable=True)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.UTC),
+        nullable=False,
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.UTC),
+        onupdate=lambda: datetime.datetime.now(datetime.UTC),
+        nullable=False,
+    )
+
+    dispute = relationship("Dispute", back_populates="investigations")
+    findings = relationship(
+        "InvestigationFinding",
+        back_populates="investigation",
+        cascade="all, delete-orphan",
+    )
+    llm_runs = relationship(
+        "LLMRun", back_populates="investigation", cascade="all, delete-orphan"
+    )
+    evidence_packs = relationship(
+        "EvidencePack", back_populates="investigation", cascade="all, delete-orphan"
+    )
+    approvals = relationship(
+        "EvidenceApproval", back_populates="investigation", cascade="all, delete-orphan"
+    )
+    submission_results = relationship(
+        "SubmissionResult", back_populates="investigation", cascade="all, delete-orphan"
+    )
+
+
+class InvestigationFinding(Base):
+    """Deterministic, code-generated finding for an investigation case."""
+
+    __tablename__ = "investigation_findings"
+
+    id = Column(String(64), primary_key=True)
+    merchant_id = Column(
+        String(64), ForeignKey("merchants.id"), nullable=False, index=True
+    )
+    investigation_id = Column(
+        String(64), ForeignKey("investigations.id"), nullable=False, index=True
+    )
+    finding_code = Column(String(64), nullable=False)
+    severity = Column(
+        String(32), nullable=False
+    )  # 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL', 'INFO'
+    alias_refs = Column(JSON, nullable=False)  # list of alias strings e.g. ["O1", "R1"]
+    computed_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.UTC),
+        nullable=False,
+    )
+
+    investigation = relationship("Investigation", back_populates="findings")
+
+
+class LLMRun(Base):
+    """Audit log of LLM reasoning runs for an investigation."""
+
+    __tablename__ = "llm_runs"
+
+    id = Column(String(64), primary_key=True)
+    merchant_id = Column(
+        String(64), ForeignKey("merchants.id"), nullable=False, index=True
+    )
+    investigation_id = Column(
+        String(64), ForeignKey("investigations.id"), nullable=False, index=True
+    )
+    provider = Column(String(64), nullable=False)
+    model = Column(String(64), nullable=False)
+    prompt_hash = Column(String(64), nullable=False)
+    raw_output = Column(Text, nullable=True)
+    validation_result = Column(JSON, nullable=True)
+    final_status = Column(
+        String(32), nullable=False
+    )  # 'VALIDATED', 'FAILED_RETRY', 'FALLBACK_TEMPLATE'
     created_at = Column(
         DateTime(timezone=True),
         default=lambda: datetime.datetime.now(datetime.UTC),
         nullable=False,
     )
 
-    payment = relationship("Payment")
-    evidence_packs = relationship("EvidencePack", back_populates="dispute")
+    investigation = relationship("Investigation", back_populates="llm_runs")
 
 
 class EvidencePack(Base):
-    """Evidence pack mapped to PayPal dispute evidence requirements."""
+    """Grounded evidence package generated from stored records only."""
 
     __tablename__ = "evidence_packs"
+    __table_args__ = (
+        UniqueConstraint(
+            "investigation_id",
+            "version",
+            name="uq_evidence_packs_investigation_version",
+        ),
+    )
 
     id = Column(String(64), primary_key=True)
-    merchant_id = Column(String(64), ForeignKey("merchants.id"), nullable=True, index=True)
-    dispute_id = Column(String(64), ForeignKey("disputes.id"), nullable=False)
-    pack_hash = Column(String(128), nullable=False)
-    completeness_pct = Column(Numeric(5, 2), nullable=False)
-    win_likelihood = Column(Numeric(5, 2), nullable=False)
-    sections_json = Column(Text, nullable=False)
-    status = Column(String(32), default="draft", nullable=False)  # 'draft', 'approved'
+    merchant_id = Column(
+        String(64), ForeignKey("merchants.id"), nullable=False, index=True
+    )
+    investigation_id = Column(
+        String(64), ForeignKey("investigations.id"), nullable=False, index=True
+    )
+    version = Column(Integer, default=1, nullable=False)
+    pack_hash = Column(String(64), nullable=False, index=True)
+    pack_json = Column(JSON, nullable=False)
+    pack_md = Column(Text, nullable=False)
     created_at = Column(
         DateTime(timezone=True),
         default=lambda: datetime.datetime.now(datetime.UTC),
         nullable=False,
     )
 
-    dispute = relationship("Dispute", back_populates="evidence_packs")
-    submissions = relationship("EvidenceSubmission", back_populates="evidence_pack")
+    # Backwards-compatibility helper for any legacy property access
+    @property
+    def dispute_id(self):
+        return self.investigation.dispute_id if self.investigation else None
+
+    investigation = relationship("Investigation", back_populates="evidence_packs")
+
+
+class EvidenceApproval(Base):
+    """Human approval or rejection decision record for an evidence pack."""
+
+    __tablename__ = "evidence_approvals"
+
+    id = Column(String(64), primary_key=True)
+    merchant_id = Column(
+        String(64), ForeignKey("merchants.id"), nullable=False, index=True
+    )
+    investigation_id = Column(
+        String(64), ForeignKey("investigations.id"), nullable=False, index=True
+    )
+    pack_hash = Column(String(64), nullable=False, index=True)
+    decision = Column(String(16), nullable=False)  # 'APPROVE' or 'REJECT'
+    approver_sub = Column(String(128), nullable=False)
+    reason = Column(Text, nullable=True)
+    decided_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.UTC),
+        nullable=False,
+    )
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
+
+    investigation = relationship("Investigation", back_populates="approvals")
+
+
+class SubmissionResult(Base):
+    """Result of external submission performed by ShopPoint."""
+
+    __tablename__ = "submission_results"
+
+    id = Column(String(64), primary_key=True)
+    merchant_id = Column(
+        String(64), ForeignKey("merchants.id"), nullable=False, index=True
+    )
+    investigation_id = Column(
+        String(64), ForeignKey("investigations.id"), nullable=False, index=True
+    )
+    submission_key = Column(String(128), unique=True, nullable=False, index=True)
+    pack_hash = Column(String(64), nullable=False)
+    status = Column(String(32), nullable=False)  # 'SUBMITTED', 'ACCEPTED', 'REJECTED'
+    paypal_reference = Column(String(128), nullable=True)
+    reported_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.UTC),
+        nullable=False,
+    )
+
+    investigation = relationship("Investigation", back_populates="submission_results")
 
 
 class EvidenceSubmission(Base):
-    """Dispute evidence submission event record."""
+    """Legacy dispute evidence submission event record (deprecated)."""
 
     __tablename__ = "evidence_submissions"
 
     id = Column(String(64), primary_key=True)
-    merchant_id = Column(String(64), ForeignKey("merchants.id"), nullable=True, index=True)
-    evidence_pack_id = Column(
-        String(64), ForeignKey("evidence_packs.id"), nullable=False
+    merchant_id = Column(
+        String(64), ForeignKey("merchants.id"), nullable=True, index=True
     )
+    evidence_pack_id = Column(String(64), nullable=False)
     paypal_dispute_id = Column(String(128), nullable=False)
     status = Column(String(32), nullable=False)  # 'submitted', 'accepted', 'rejected'
     response_payload = Column(Text, nullable=True)
@@ -319,8 +563,6 @@ class EvidenceSubmission(Base):
         default=lambda: datetime.datetime.now(datetime.UTC),
         nullable=False,
     )
-
-    evidence_pack = relationship("EvidencePack", back_populates="submissions")
 
 
 class MerchantAudit(Base):
@@ -375,7 +617,9 @@ class AuditScoreEvent(Base):
     id = Column(String(64), primary_key=True)
     decision_id = Column(String(64), nullable=True, index=True)
     order_id = Column(String(64), ForeignKey("orders.id"), nullable=False)
-    merchant_id = Column(String(64), ForeignKey("merchants.id"), nullable=True, index=True)
+    merchant_id = Column(
+        String(64), ForeignKey("merchants.id"), nullable=True, index=True
+    )
     channel = Column(String(32), default="paypal", nullable=False)
     risk_score = Column(Numeric(6, 4), nullable=False)
     tier = Column(String(32), default="LOW", nullable=False)
