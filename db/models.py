@@ -364,8 +364,12 @@ class Investigation(Base):
         String(64), ForeignKey("merchants.id"), nullable=False, index=True
     )
     dispute_id = Column(
-        String(64), ForeignKey("disputes.id"), nullable=False, index=True
+        String(64), ForeignKey("disputes.id"), nullable=True, index=True
     )
+    transaction_id = Column(
+        String(64), ForeignKey("orders.id"), nullable=True, index=True
+    )
+    decision_id = Column(String(64), nullable=True, index=True)
     status = Column(
         String(32), default="OPEN", nullable=False
     )  # 'OPEN', 'PENDING_APPROVAL', 'APPROVED', 'REJECTED', 'SUBMITTED'

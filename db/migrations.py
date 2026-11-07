@@ -214,6 +214,87 @@ def run_migrations(target_engine=None):
             except Exception:
                 pass
 
+        # 3a-2. Ensure investigations has transaction_id and decision_id columns
+        if "investigations" in existing_tables:
+            inv_cols = {col["name"] for col in inspector.get_columns("investigations")}
+            inv_needed = [
+                ("transaction_id", "VARCHAR(64)"),
+                ("decision_id", "VARCHAR(64)"),
+            ]
+            for col_name, col_type in inv_needed:
+                if col_name not in inv_cols:
+                    try:
+                        conn.execute(
+                            text(
+                                f"ALTER TABLE investigations ADD COLUMN {col_name} {col_type};"
+                            )
+                        )
+                        conn.commit()
+                    except Exception:
+                        pass
+            try:
+                conn.execute(
+                    text(
+                        "CREATE INDEX IF NOT EXISTS ix_investigations_transaction_id ON investigations (merchant_id, transaction_id);"
+                    )
+                )
+                conn.commit()
+            except Exception:
+                pass
+
+            # SQLite migration to relax dispute_id NOT NULL constraint if present
+            inv_col_info = {
+                c["name"]: c for c in inspector.get_columns("investigations")
+            }
+            if (
+                inv_col_info.get("dispute_id")
+                and not inv_col_info["dispute_id"]["nullable"]
+                and eng.dialect.name == "sqlite"
+            ):
+                try:
+                    conn.execute(text("PRAGMA foreign_keys = OFF;"))
+                    conn.execute(text("""
+                            CREATE TABLE investigations_new (
+                                id VARCHAR(64) PRIMARY KEY,
+                                merchant_id VARCHAR(64) NOT NULL,
+                                dispute_id VARCHAR(64),
+                                transaction_id VARCHAR(64),
+                                decision_id VARCHAR(64),
+                                status VARCHAR(32) NOT NULL DEFAULT 'OPEN',
+                                case_hash VARCHAR(64),
+                                created_at DATETIME NOT NULL,
+                                updated_at DATETIME NOT NULL
+                            );
+                            """))
+                    conn.execute(text("""
+                            INSERT INTO investigations_new (id, merchant_id, dispute_id, transaction_id, decision_id, status, case_hash, created_at, updated_at)
+                            SELECT id, merchant_id, dispute_id, transaction_id, decision_id, status, case_hash, created_at, updated_at
+                            FROM investigations;
+                            """))
+                    conn.execute(text("DROP TABLE investigations;"))
+                    conn.execute(
+                        text("ALTER TABLE investigations_new RENAME TO investigations;")
+                    )
+                    conn.execute(
+                        text(
+                            "CREATE INDEX IF NOT EXISTS ix_investigations_merchant_id ON investigations (merchant_id);"
+                        )
+                    )
+                    conn.execute(
+                        text(
+                            "CREATE INDEX IF NOT EXISTS ix_investigations_dispute_id ON investigations (dispute_id);"
+                        )
+                    )
+                    conn.execute(
+                        text(
+                            "CREATE INDEX IF NOT EXISTS ix_investigations_transaction_id ON investigations (merchant_id, transaction_id);"
+                        )
+                    )
+                    conn.execute(text("PRAGMA foreign_keys = ON;"))
+                    conn.commit()
+                except Exception:
+                    pass
+
         # 3b. Scope payment_events uniqueness to (merchant_id, event_id) and add order_reference
         if "payment_events" in existing_tables:
             pe_cols = {col["name"] for col in inspector.get_columns("payment_events")}
