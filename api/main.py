@@ -9,6 +9,7 @@ from api.routes import (
     customers,
     disputes,
     events,
+    investigations,
     models,
     payments,
     reviews,
@@ -54,6 +55,7 @@ app.include_router(models.router)
 app.include_router(payments.router)
 app.include_router(webhooks.router)
 app.include_router(disputes.router)
+app.include_router(investigations.router)
 app.include_router(assistant.router)
 
 

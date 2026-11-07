@@ -23,7 +23,9 @@ EMBED_EXPIRY_SECONDS = 600  # 10 minutes
 
 class EmbedTokenRequest(BaseModel):
     sub: str = Field(..., description="End-user or session ID supplied by merchant")
-    ttl_seconds: Optional[int] = Field(default=None, description="Optional custom TTL in seconds")
+    ttl_seconds: Optional[int] = Field(
+        default=None, description="Optional custom TTL in seconds"
+    )
     scopes: Optional[List[str]] = Field(
         default_factory=lambda: ["read", "reviews"],
         description="Permission scopes granted to the embed token",
@@ -235,4 +237,78 @@ def require_read_or_review_auth(
         auth_mode="embed_token",
         sub=decoded.get("sub"),
         scopes=decoded.get("scp", []),
+    )
+
+
+def require_evidence_approve_auth(
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db),
+) -> AuthContext:
+    """
+    Evidence approval requires human review auth:
+    - MUST be an embed token (HS256 JWT) with scope 'evidence:approve' and non-empty 'sub'
+    - Rejects server API keys with 403 Forbidden
+    """
+    if not authorization:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=GENERIC_UNAUTHORIZED_DETAIL,
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    parts = authorization.strip().split(" ", 1)
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=GENERIC_UNAUTHORIZED_DETAIL,
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    raw_token = parts[1].strip()
+
+    # Reject server keys with 403 Forbidden
+    if raw_token.startswith("rg_live_") or raw_token.startswith("rg_test_"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Human review approval requires embed token with 'evidence:approve' scope; server API keys forbidden.",
+        )
+
+    # Verify embed token
+    signing_key = get_embed_signing_key()
+    try:
+        decoded = jwt.decode(
+            raw_token,
+            signing_key,
+            algorithms=["HS256"],
+            audience=EMBED_TOKEN_AUDIENCE,
+        )
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired"
+        )
+    except jwt.PyJWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail=GENERIC_UNAUTHORIZED_DETAIL
+        )
+
+    tenant_id = decoded.get("tid")
+    sub = decoded.get("sub")
+    scopes = decoded.get("scp", [])
+
+    if not tenant_id or not sub:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail=GENERIC_UNAUTHORIZED_DETAIL
+        )
+
+    if "evidence:approve" not in scopes:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Token missing required 'evidence:approve' scope",
+        )
+
+    return AuthContext(
+        tenant_id=str(tenant_id),
+        auth_mode="embed_token",
+        sub=str(sub),
+        scopes=scopes,
     )
