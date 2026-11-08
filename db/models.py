@@ -373,6 +373,9 @@ class Investigation(Base):
     status = Column(
         String(32), default="OPEN", nullable=False
     )  # 'OPEN', 'PENDING_APPROVAL', 'APPROVED', 'REJECTED', 'SUBMITTED'
+    source = Column(
+        String(32), default="AUTO_CRITICAL", nullable=False
+    )  # 'AUTO_CRITICAL', 'MANUAL'
     case_hash = Column(String(64), nullable=True)
     created_at = Column(
         DateTime(timezone=True),

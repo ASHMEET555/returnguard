@@ -12,7 +12,10 @@ Protected by Bearer API Key authentication and strict merchant tenancy boundarie
 import json
 import uuid
 from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+import logging
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+
+logger = logging.getLogger(__name__)
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -91,6 +94,7 @@ class ScoreResponse(BaseModel):
 )
 def score_transaction(
     payload: ScoreRequest,
+    request: Request = None,
     auth_merchant_id: str = Depends(get_api_key_merchant),
     db: Session = Depends(get_db),
     x_simulate_model_unavailable: Optional[str] = Header(None),
@@ -177,7 +181,7 @@ def score_transaction(
     except Exception:
         db.rollback()
 
-    # Step C2: Auto-open investigation on critical decisions
+    # Step C2 & Step 1: Auto-open investigation on critical decisions
     # Separate transaction: failure must NEVER fail or alter the score response.
     if result.get("severity") == "critical" or result.get("policy_action") == "BLOCK":
         try:
@@ -204,9 +208,11 @@ def score_transaction(
                         transaction_id=order_id_val,
                         decision_id=decision_id,
                         status="OPEN",
+                        source="AUTO_CRITICAL",
                     )
                     separate_db.add(new_inv)
                     from disputes.step_logger import record_step, STEP_CASE_OPENED
+
                     record_step(
                         db=separate_db,
                         merchant_id=auth_merchant_id,
@@ -217,12 +223,23 @@ def score_transaction(
                         note=f"Case automatically opened for critical risk decision (action: {result.get('policy_action')}, severity: {result.get('severity')})",
                     )
                     separate_db.commit()
-            except Exception:
+            except Exception as e:
                 separate_db.rollback()
+                req_id = (
+                    request.headers.get("x-request-id", "unknown")
+                    if request
+                    else "unknown"
+                )
+                logger.error(f"[{req_id}] Failed to auto-open investigation: {e}")
             finally:
                 separate_db.close()
-        except Exception:
-            pass
+        except Exception as e:
+            req_id = (
+                request.headers.get("x-request-id", "unknown") if request else "unknown"
+            )
+            logger.error(
+                f"[{req_id}] Failed to acquire session for auto-open investigation: {e}"
+            )
 
     return ScoreResponse(**result)
 

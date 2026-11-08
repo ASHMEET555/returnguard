@@ -214,12 +214,13 @@ def run_migrations(target_engine=None):
             except Exception:
                 pass
 
-        # 3a-2. Ensure investigations has transaction_id and decision_id columns
+        # 3a-2. Ensure investigations has transaction_id, decision_id, and source columns
         if "investigations" in existing_tables:
             inv_cols = {col["name"] for col in inspector.get_columns("investigations")}
             inv_needed = [
                 ("transaction_id", "VARCHAR(64)"),
                 ("decision_id", "VARCHAR(64)"),
+                ("source", "VARCHAR(32) DEFAULT 'AUTO_CRITICAL'"),
             ]
             for col_name, col_type in inv_needed:
                 if col_name not in inv_cols:
@@ -261,14 +262,15 @@ def run_migrations(target_engine=None):
                                 transaction_id VARCHAR(64),
                                 decision_id VARCHAR(64),
                                 status VARCHAR(32) NOT NULL DEFAULT 'OPEN',
+                                source VARCHAR(32) NOT NULL DEFAULT 'AUTO_CRITICAL',
                                 case_hash VARCHAR(64),
                                 created_at DATETIME NOT NULL,
                                 updated_at DATETIME NOT NULL
                             );
                             """))
                     conn.execute(text("""
-                            INSERT INTO investigations_new (id, merchant_id, dispute_id, transaction_id, decision_id, status, case_hash, created_at, updated_at)
-                            SELECT id, merchant_id, dispute_id, transaction_id, decision_id, status, case_hash, created_at, updated_at
+                            INSERT INTO investigations_new (id, merchant_id, dispute_id, transaction_id, decision_id, status, source, case_hash, created_at, updated_at)
+                            SELECT id, merchant_id, dispute_id, transaction_id, decision_id, status, COALESCE(source, 'AUTO_CRITICAL'), case_hash, created_at, updated_at
                             FROM investigations;
                             """))
                     conn.execute(text("DROP TABLE investigations;"))
