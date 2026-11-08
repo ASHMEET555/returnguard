@@ -5,6 +5,7 @@
 import { ClientOptions } from "./auth";
 import { Transport } from "./transport";
 import {
+  TransactionInvestigationResponse,
   AnalyticsSummary,
   CloseInvestigationPayload,
   CustomerListParams,
@@ -224,6 +225,38 @@ export class ReturnGuardClient {
       return this.transport.request<ModelPerformance>({
         method: "GET",
         path: "/v1/models/performance",
+      });
+    },
+  };
+
+  /**
+   * Transaction-level investigation operations.
+   */
+  public readonly transactions = {
+    /**
+     * Retrieves the current investigation associated with a transaction.
+     * GET /v1/transactions/{transaction_id}/investigation. Retriable.
+     */
+    getInvestigation: async (transactionId: string): Promise<TransactionInvestigationResponse> => {
+      return this.transport.request<TransactionInvestigationResponse>({
+        method: "GET",
+        path: `/v1/transactions/${encodeURIComponent(transactionId)}/investigation`,
+      });
+    },
+
+    /**
+     * Opens a manual investigation or returns the existing open one.
+     * POST /v1/transactions/{transaction_id}/investigation. NEVER retried automatically.
+     */
+    openInvestigation: async (
+      transactionId: string,
+      payload?: { reason?: string }
+    ): Promise<TransactionInvestigationResponse> => {
+      return this.transport.request<TransactionInvestigationResponse>({
+        method: "POST",
+        path: `/v1/transactions/${encodeURIComponent(transactionId)}/investigation`,
+        body: payload || {},
+        allowRetry: false,
       });
     },
   };

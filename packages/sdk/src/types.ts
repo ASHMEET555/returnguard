@@ -281,7 +281,9 @@ export interface RiskTrendsResponse {
 export interface InvestigationListItem {
   id: string;
   dispute_id: string | null;
+  transaction_id?: string | null;
   status: string;
+  source?: string;
   created_at: string;
   updated_at: string;
   case_hash: string;
@@ -345,6 +347,7 @@ export interface InvestigationDetail {
   transaction_id: string | null;
   decision_id: string | null;
   status: string;
+  source?: string;
   created_at: string;
   updated_at: string;
   case_hash: string;
@@ -384,4 +387,17 @@ export interface CloseInvestigationPayload {
   outcome: string;
   note: string;
   steps_performed?: string[];
+}
+
+export interface TransactionInvestigationResponse {
+  id: string;
+  merchant_id: string;
+  transaction_id: string;
+  decision_id?: string | null;
+  dispute_id?: string | null;
+  status: string;
+  source: string;
+  case_hash?: string | null;
+  created_at: string;
+  updated_at: string;
 }
