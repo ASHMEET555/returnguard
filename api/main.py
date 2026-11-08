@@ -14,6 +14,7 @@ from api.routes import (
     payments,
     reviews,
     score,
+    transactions_investigation,
     webhooks,
 )
 from auth.embed_tokens import router as auth_router
@@ -56,6 +57,7 @@ app.include_router(payments.router)
 app.include_router(webhooks.router)
 app.include_router(disputes.router)
 app.include_router(investigations.router)
+app.include_router(transactions_investigation.router)
 app.include_router(assistant.router)
 
 
