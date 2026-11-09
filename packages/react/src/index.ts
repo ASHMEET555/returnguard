@@ -30,3 +30,28 @@ export { PaymentPipelinePage } from './components/PaymentPipelinePage';
 export { ReviewsPage } from './components/ReviewsPage';
 export { ReportsPage } from './components/ReportsPage';
 export { ReturnGuardDashboard } from './components/ReturnGuardDashboard';
+
+// Chart Foundation
+export {
+  ChartContainer,
+  ChartTooltip,
+  ChartLegend,
+  ChartEmptyState,
+  ChartLoadingState,
+  ChartErrorState,
+  CHART_COLORS,
+  CHART_CSS_VARS,
+  calculatePercentage,
+  formatMetricValue,
+} from './components/charts';
+export type {
+  ChartContainerProps,
+  ChartTooltipProps,
+  ChartTooltipPayloadItem,
+  ChartLegendProps,
+  ChartLegendItem,
+  ChartEmptyStateProps,
+  ChartLoadingStateProps,
+  ChartErrorStateProps,
+  ChartColorKey,
+} from './components/charts';

@@ -1,151 +1,259 @@
-import React from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
 import { useTransactionRisk } from '../hooks';
 import { RiskBadge } from './RiskBadge';
+import { CloseIcon } from './icons';
 
 export interface DetailDrawerProps {
   decisionId: string | null;
   onClose: () => void;
 }
 
+/**
+ * Modernized accessible investigation sheet for transaction details and SHAP explanations.
+ * Conforms to Stripe + Linear visual standards with strict keyboard focus trapping,
+ * accessible ARIA dialog roles, focus restoration, and zero visual clutter.
+ */
 export const DetailDrawer: React.FC<DetailDrawerProps> = ({ decisionId, onClose }) => {
   const { decision, audit, loading, error } = useTransactionRisk(decisionId);
+
+  const drawerRef = useRef<HTMLElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const previousActiveElementRef = useRef<HTMLElement | null>(null);
+
+  // Store trigger element when drawer opens
+  useEffect(() => {
+    if (decisionId) {
+      previousActiveElementRef.current = document.activeElement as HTMLElement | null;
+
+      // Focus the close button once drawer renders
+      const timer = setTimeout(() => {
+        closeButtonRef.current?.focus();
+      }, 50);
+
+      return () => clearTimeout(timer);
+    }
+  }, [decisionId]);
+
+  // Restore focus safely on unmount or close
+  const restoreFocus = useCallback(() => {
+    const el = previousActiveElementRef.current;
+    if (el && typeof el.focus === 'function' && document.contains(el)) {
+      el.focus();
+    }
+  }, []);
+
+  const handleClose = useCallback(() => {
+    restoreFocus();
+    onClose();
+  }, [onClose, restoreFocus]);
+
+  // Focus trap and ESC key handler
+  useEffect(() => {
+    if (!decisionId) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        handleClose();
+        return;
+      }
+
+      if (e.key === 'Tab') {
+        const container = drawerRef.current;
+        if (!container) return;
+
+        const focusableElements = container.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
+
+        if (focusableElements.length === 0) {
+          e.preventDefault();
+          return;
+        }
+
+        const firstEl = focusableElements[0];
+        const lastEl = focusableElements[focusableElements.length - 1];
+
+        if (e.shiftKey) {
+          if (document.activeElement === firstEl) {
+            e.preventDefault();
+            lastEl.focus();
+          }
+        } else {
+          if (document.activeElement === lastEl) {
+            e.preventDefault();
+            firstEl.focus();
+          }
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [decisionId, handleClose]);
 
   if (!decisionId) return null;
 
   return (
-    <div className="rg-drawer-overlay" onClick={onClose} role="dialog" aria-modal="true">
-      <div className="rg-drawer" onClick={(e) => e.stopPropagation()}>
-        <div className="rg-drawer-header">
-          <div>
-            <div style={{ fontSize: 11, color: 'var(--rg-text-muted)', textTransform: 'uppercase' }}>
+    <div
+      className="rg-drawer-overlay"
+      onClick={handleClose}
+      aria-hidden="false"
+    >
+      <aside
+        ref={drawerRef}
+        className="rg-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="rg-drawer-title"
+        aria-describedby="rg-drawer-desc"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Sticky Header */}
+        <header className="rg-drawer-header">
+          <div className="rg-drawer-header-info">
+            <span id="rg-drawer-desc" className="rg-drawer-subtitle">
               Transaction Investigation
-            </div>
-            <div style={{ fontSize: 16, fontWeight: 700, marginTop: 2 }}>
+            </span>
+            <h2 id="rg-drawer-title" className="rg-drawer-title">
               {decision?.order_id || decisionId}
-            </div>
+            </h2>
           </div>
           <button
+            ref={closeButtonRef}
             type="button"
-            onClick={onClose}
-            aria-label="Close detail drawer"
-            style={{
-              background: 'transparent',
-              border: '1px solid var(--rg-border)',
-              color: 'var(--rg-text-primary)',
-              borderRadius: 6,
-              padding: '6px 12px',
-              cursor: 'pointer',
-            }}
+            className="rg-drawer-close-btn"
+            onClick={handleClose}
+            aria-label="Close transaction investigation drawer"
           >
-            ✕ Close
+            <CloseIcon size={14} aria-hidden="true" />
+            <span>Close</span>
           </button>
-        </div>
+        </header>
 
+        {/* Scrollable Body */}
         <div className="rg-drawer-body">
           {loading && (
-            <div style={{ padding: 40, textAlign: 'center', color: 'var(--rg-text-muted)' }}>
-              Loading scoring audit and explanation...
+            <div className="rg-drawer-loading" role="status">
+              <span className="rg-loading-spinner" aria-hidden="true" />
+              <span>Loading scoring audit and explanation...</span>
             </div>
           )}
 
           {error && (
-            <div style={{ padding: 16, background: 'var(--rg-high-bg)', border: '1px solid var(--rg-high-border)', borderRadius: 6 }}>
-              <div style={{ color: 'var(--rg-high-text)', fontWeight: 600 }}>Failed to load decision</div>
-              <div style={{ fontSize: 12, marginTop: 4 }}>{error.message}</div>
+            <div className="rg-drawer-error" role="alert">
+              <div className="rg-drawer-error-title">Failed to load decision</div>
+              <div className="rg-drawer-error-msg">{error.message}</div>
             </div>
           )}
 
           {decision && (
             <>
               {/* Section 1: Scoring Verdict */}
-              <div className="rg-drawer-section">
+              <section className="rg-drawer-section">
                 <div className="rg-drawer-section-title">ReturnGuard Recommendation</div>
-                <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
+                <div className="rg-verdict-bar">
                   <RiskBadge score={decision.risk_score} />
                   <RiskBadge action={decision.suggested_action} />
-                  <span style={{ fontSize: 12, color: 'var(--rg-text-muted)' }}>
-                    Severity: <strong>{decision.severity}</strong>
+                  <span className="rg-verdict-severity">
+                    Severity: <strong>{decision.severity || 'unknown'}</strong>
                   </span>
                 </div>
-                <div style={{ fontSize: 12, color: 'var(--rg-text-secondary)', lineHeight: 1.5 }}>
+                <p className="rg-verdict-note">
                   ReturnGuard evaluates transaction characteristics and recommends an operational hold/action.
                   Actual capture or decline is executed independently by the payment provider.
-                </div>
-              </div>
+                </p>
+              </section>
 
-              {/* Section 2: Why This Was Flagged */}
-              <div className="rg-drawer-section">
+              {/* Section 2: Why This Was Flagged / SHAP Factors */}
+              <section className="rg-drawer-section">
                 <div className="rg-drawer-section-title">Why This Was Flagged</div>
                 {decision.reason_codes && decision.reason_codes.length > 0 ? (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  <div className="rg-reason-grid">
                     {decision.reason_codes.map((rc) => (
-                      <span
-                        key={rc.feature}
-                        style={{
-                          background: 'var(--rg-bg-tertiary)',
-                          border: '1px solid var(--rg-border)',
-                          borderRadius: 4,
-                          padding: '4px 8px',
-                          fontSize: 12,
-                          fontFamily: 'monospace',
-                        }}
-                      >
-                        {rc.feature}: {rc.direction}
-                      </span>
+                      <div key={rc.feature} className="rg-reason-chip">
+                        <span className="rg-reason-feature">{rc.feature}</span>
+                        <span className="rg-reason-divider">:</span>
+                        <span className="rg-reason-direction">{rc.direction}</span>
+                      </div>
                     ))}
                   </div>
                 ) : (
-                  <div style={{ fontSize: 13, color: 'var(--rg-text-muted)' }}>
+                  <div className="rg-drawer-empty-text">
                     No specific rule or anomaly triggers flagged for this transaction.
                   </div>
                 )}
-              </div>
+              </section>
 
               {/* Section 3: Payment & Processor Context */}
-              <div className="rg-drawer-section">
+              <section className="rg-drawer-section">
                 <div className="rg-drawer-section-title">Payment & Processor Context</div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, fontSize: 13 }}>
-                  <div>
-                    <span style={{ color: 'var(--rg-text-muted)' }}>Order ID:</span>{' '}
-                    <strong style={{ fontFamily: 'monospace' }}>{decision.order_id || '--'}</strong>
+                <div className="rg-context-grid">
+                  <div className="rg-context-item">
+                    <span className="rg-context-label">Order ID</span>
+                    <span className="rg-context-value rg-font-mono">{decision.order_id || '--'}</span>
                   </div>
-                  <div>
-                    <span style={{ color: 'var(--rg-text-muted)' }}>Channel:</span>{' '}
-                    <strong>{decision.channel || 'web'}</strong>
+                  <div className="rg-context-item">
+                    <span className="rg-context-label">Channel</span>
+                    <span className="rg-context-value">{decision.channel || 'web'}</span>
                   </div>
-                  <div>
-                    <span style={{ color: 'var(--rg-text-muted)' }}>ReturnGuard Mode:</span>{' '}
-                    <strong>{decision.shadow ? 'Shadow (Non-blocking)' : 'Live Policy Enforcement'}</strong>
+                  <div className="rg-context-item">
+                    <span className="rg-context-label">ReturnGuard Mode</span>
+                    <span className="rg-context-value">
+                      {decision.shadow ? 'Shadow (Non-blocking)' : 'Live Policy Enforcement'}
+                    </span>
                   </div>
-                  <div>
-                    <span style={{ color: 'var(--rg-text-muted)' }}>Payment Processor Status:</span>{' '}
-                    <span style={{ color: 'var(--rg-text-muted)', fontStyle: 'italic' }}>
+                  <div className="rg-context-item">
+                    <span className="rg-context-label">Payment Processor Status</span>
+                    <span className="rg-context-value rg-text-muted rg-italic">
                       Not Verified (Owned by Merchant / ShopPoint)
                     </span>
                   </div>
                 </div>
-              </div>
+              </section>
 
-              {/* Section 4: Audit Event Timeline */}
-              <div className="rg-drawer-section">
+              {/* Section 4: Audit Event Timeline & Signals */}
+              <section className="rg-drawer-section">
                 <div className="rg-drawer-section-title">Audit Trail & Signals</div>
-                <div style={{ fontSize: 12, color: 'var(--rg-text-secondary)' }}>
+                <div className="rg-audit-container">
                   {audit ? (
-                    <div>
-                      <div><strong>Decision ID:</strong> {audit.data.decision.decision_id}</div>
-                      <div style={{ marginTop: 4 }}><strong>Order ID:</strong> {audit.data.decision.order_id}</div>
-                      <div style={{ marginTop: 4 }}><strong>Policy Action:</strong> {audit.data.policy_trace.policy_action}</div>
-                      <div style={{ marginTop: 4 }}><strong>Reconstructed Features:</strong> {Object.keys(audit.data.feature_snapshot || {}).length} features verified</div>
+                    <div className="rg-audit-grid">
+                      <div className="rg-audit-row">
+                        <span className="rg-audit-label">Decision ID:</span>
+                        <span className="rg-audit-value rg-font-mono">
+                          {audit.data?.decision?.decision_id || '--'}
+                        </span>
+                      </div>
+                      <div className="rg-audit-row">
+                        <span className="rg-audit-label">Order ID:</span>
+                        <span className="rg-audit-value rg-font-mono">
+                          {audit.data?.decision?.order_id || '--'}
+                        </span>
+                      </div>
+                      <div className="rg-audit-row">
+                        <span className="rg-audit-label">Policy Action:</span>
+                        <span className="rg-audit-value">
+                          {audit.data?.policy_trace?.policy_action || '--'}
+                        </span>
+                      </div>
+                      <div className="rg-audit-row">
+                        <span className="rg-audit-label">Reconstructed Features:</span>
+                        <span className="rg-audit-value">
+                          {Object.keys(audit.data?.feature_snapshot || {}).length} features verified
+                        </span>
+                      </div>
                     </div>
                   ) : (
-                    <div>Basic audit event snapshot recorded. Full feature reconstruction stored in tenant repository.</div>
+                    <div className="rg-drawer-empty-text">
+                      Basic audit event snapshot recorded. Full feature reconstruction stored in tenant repository.
+                    </div>
                   )}
                 </div>
-              </div>
+              </section>
             </>
           )}
         </div>
-      </div>
+      </aside>
     </div>
   );
 };

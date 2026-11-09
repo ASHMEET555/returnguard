@@ -7,6 +7,11 @@ export interface BadgeProps {
   className?: string;
 }
 
+/**
+ * Compact, professional status badge for risk scores, policy actions, and severity levels.
+ * Adheres to Stripe & Linear visual restraint, high contrast in light/dark themes, and
+ * consistent monospace score values without decorative emojis or oversized bubbles.
+ */
 export const RiskBadge: React.FC<BadgeProps> = ({ score, severity, action, className = '' }) => {
   let variant = 'neutral';
   let label = 'UNKNOWN';

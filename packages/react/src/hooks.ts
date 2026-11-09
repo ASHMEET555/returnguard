@@ -243,8 +243,10 @@ export function useReviews(limit: number = 25) {
     try {
       const res = await client.reviews.list({ limit });
       setPage(res);
+      return res;
     } catch (err: unknown) {
       setError(err instanceof Error ? err : new Error(String(err)));
+      return null;
     } finally {
       setLoading(false);
     }
