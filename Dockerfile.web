@@ -9,14 +9,14 @@ COPY web/ ./web/
 # Build @returnguard/react package first
 WORKDIR /app/packages/react
 RUN npm install
-RUN npm run build
+RUN tsup && node -e \"fs.copyFileSync('src/styles.css', 'dist/styles.css')\"
 
 # Build Next.js application
 WORKDIR /app/web
 RUN npm install
 ARG NEXT_PUBLIC_RETURNGUARD_API_URL
 ENV NEXT_PUBLIC_RETURNGUARD_API_URL=$NEXT_PUBLIC_RETURNGUARD_API_URL
-RUN npm run build
+RUN next build --webpack
 
 # Production runtime stage
 FROM node:20-alpine AS runner
