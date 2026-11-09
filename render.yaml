@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: returnguard-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: free
+    region: oregon
+    envVars:
+      - key: PORT
+        value: 8000
+      - key: RG_EMBED_SIGNING_KEY
+        value: 0123456789012345678901234567890123456789_dev_embed_signing_key_returnguard
+      - key: CORS_ORIGINS
+        value: "*"
+
+  - type: web
+    name: returnguard-dashboard
+    runtime: docker
+    dockerfilePath: ./Dockerfile.web
+    dockerContext: .
+    plan: free
+    region: oregon
+    envVars:
+      - key: PORT
+        value: 3001
+      - key: NEXT_PUBLIC_RETURNGUARD_API_URL
+        fromService:
+          type: web
+          name: returnguard-api
+          property: host

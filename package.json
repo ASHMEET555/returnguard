@@ -1,0 +1,9 @@
+{
+  "name": "returnguard",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "npm --prefix packages/react install && npm --prefix packages/react run build && npm --prefix web install && npm --prefix web run build",
+    "start": "npm --prefix web start"
+  }
+}

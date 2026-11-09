@@ -32,4 +32,4 @@ COPY --from=builder /app/packages ./packages
 ENV PORT=3001
 EXPOSE 3001
 
-CMD ["npx", "next", "start", "-p", "3001"]
+CMD ["sh", "-c", "npx next start -p ${PORT:-3001} -H 0.0.0.0"]

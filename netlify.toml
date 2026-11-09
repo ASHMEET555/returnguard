@@ -1,0 +1,9 @@
+[build]
+  command = "npm --prefix packages/react install && npm --prefix packages/react run build && npm --prefix web install && npm --prefix web run build"
+  publish = "web/.next"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
