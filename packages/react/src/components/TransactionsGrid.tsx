@@ -129,7 +129,7 @@ export const TransactionsGrid: React.FC<TransactionsGridProps> = ({
 
   return (
     <div
-      className={gridThemeClass}
+      className={`rg-transactions-grid-wrap ${gridThemeClass}`}
       style={{
         height: 'calc(100vh - 240px)',
         minHeight: 520,
@@ -141,6 +141,7 @@ export const TransactionsGrid: React.FC<TransactionsGridProps> = ({
       }}
     >
       <AgGridReact<ScoreResult>
+        theme="legacy"
         rowData={items}
         columnDefs={columnDefs}
         defaultColDef={defaultColDef}
@@ -151,10 +152,9 @@ export const TransactionsGrid: React.FC<TransactionsGridProps> = ({
           checkboxes: false,
           enableClickSelection: true,
         }}
-        rowHeight={48}
-        headerHeight={44}
+        rowHeight={44}
+        headerHeight={40}
         animateRows={true}
-        suppressCellFocus={true}
         onRowClicked={handleRowClicked}
       />
     </div>

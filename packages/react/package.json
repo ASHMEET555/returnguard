@@ -27,9 +27,11 @@
     "react-dom": ">=16.14.0 || ^17.0.0 || ^18.0.0 || ^19.0.0"
   },
   "dependencies": {
-    "@returnguard/sdk": "file:../sdk"
+    "@returnguard/sdk": "file:../sdk",
+    "recharts": "^2.15.1"
   },
   "devDependencies": {
+    "@types/node": "^26.6.6",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "ag-grid-community": "^36.2.0",
