@@ -115,3 +115,26 @@ This document formally records architectural, evaluation, and policy decisions e
   4. *Zero ReturnGuard PayPal Footprint*: ReturnGuard holds zero PayPal client credentials, tokens, or webhook secrets. The storefront (`ShopPoint`) is the sole PayPal client. Incoming events are ingested via the authenticated normalized relay endpoint `POST /v1/transactions/events`, and the legacy route `POST /v1/paypal/webhooks` is retired with `HTTP 410 Gone`.
   5. *Per-Key Sliding-Window Rate Limiting*: Rate limiting is enforced per API key (`RATE_LIMIT_PER_MINUTE`, default 60) in-process after authentication, returning `HTTP 429 Too Many Requests` with `Retry-After`. Unauthenticated traffic cannot exhaust tenant budgets.
   6. *Read-Only Audit Reconstruction*: `GET /v1/decisions/{decision_id}/audit` provides immutable, read-only decision reconstruction for the owning tenant with zero state mutation.
+---
+
+### D-I1: Point-in-Time Case File & Alias Isolation
+- **Decision**: All dispute investigations construct a strict point-in-time snapshot as-of the disputed transaction cutoff (`target_order.order_time` or dispute timestamp). All real IDs (`merchants.id`, `orders.id`, `refunds.id`, etc.) are mapped to deterministic sanitized aliases (`T1`, `O1..On`, `R1..Rn`, `D1..Dn`).
+- **Rationale**: Prevents data leakage from subsequent orders or post-dispute actions. Completely eliminates private PII and real IDs from being ingested by LLM reasoning layers.
+
+---
+
+### D-I2: LLM Boundary & Non-Interference
+- **Decision**: The LLM is strictly an advisory synthesizer of findings and writer of draft narratives. The LLM is prohibited from setting, recalculating, or modifying risk probabilities, tiers, policy actions, rule hits, SHAP values, or audit records.
+- **Verification**: Enforced by import boundary AST checks (`tests/test_phase_i_import_boundaries.py`) and byte-identical invariance tests (`tests/test_phase_i_step5.py`).
+
+---
+
+### D-I3: Human Reviewer Approval Gate
+- **Decision**: Evidence pack approvals require an embed token (`AuthContext` mode `embed_token`) carrying scope `evidence:approve` and an individual reviewer subject `sub`. Server API keys are strictly rejected with 403 Forbidden. Modifying any finding, document, or narrative revokes prior approvals.
+- **Rationale**: Guarantees merchant human-in-the-loop accountability before evidence submission.
+
+---
+
+### D-I4: PayPal Submission Handoff Boundary
+- **Decision**: ReturnGuard never communicates directly with PayPal Disputes API. Submission logic belongs exclusively to the merchant storefront (`ShopPoint`). ReturnGuard provides canonical JSON/Markdown packages via `GET /v1/investigations/{id}/submission-package` and records submission results via `POST /v1/investigations/{id}/submission-result`.
+- **Rationale**: Preserves ReturnGuard as a dedicated risk detection engine and prevents PayPal credential contamination.

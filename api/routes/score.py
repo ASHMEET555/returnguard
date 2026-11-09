@@ -12,7 +12,10 @@ Protected by Bearer API Key authentication and strict merchant tenancy boundarie
 import json
 import uuid
 from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+import logging
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+
+logger = logging.getLogger(__name__)
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -42,7 +45,9 @@ class ScoreRequest(BaseModel):
     geo_region: Optional[str] = Field(default="IN-KA")
     payment_method: Optional[str] = Field(default="card")
     status: Optional[str] = Field(default="success")
-    merchant_id: Optional[str] = Field(default=None, description="Optional merchant ID; if present, must match key")
+    merchant_id: Optional[str] = Field(
+        default=None, description="Optional merchant ID; if present, must match key"
+    )
     merchant_category: Optional[str] = Field(default="retail")
     timestamp: Optional[str] = None
     account_created: Optional[str] = None
@@ -89,6 +94,7 @@ class ScoreResponse(BaseModel):
 )
 def score_transaction(
     payload: ScoreRequest,
+    request: Request = None,
     auth_merchant_id: str = Depends(get_api_key_merchant),
     db: Session = Depends(get_db),
     x_simulate_model_unavailable: Optional[str] = Header(None),
@@ -114,7 +120,11 @@ def score_transaction(
     if payload.prior_transactions:
         for idx, p in enumerate(payload.prior_transactions):
             p_mid = p.get("merchant_id")
-            if p_mid is not None and str(p_mid).strip() != "" and str(p_mid).strip() != auth_merchant_id:
+            if (
+                p_mid is not None
+                and str(p_mid).strip() != ""
+                and str(p_mid).strip() != auth_merchant_id
+            ):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=(
@@ -170,6 +180,66 @@ def score_transaction(
         repo.save_audit_score_event(audit_event)
     except Exception:
         db.rollback()
+
+    # Step C2 & Step 1: Auto-open investigation on critical decisions
+    # Separate transaction: failure must NEVER fail or alter the score response.
+    if result.get("severity") == "critical" or result.get("policy_action") == "BLOCK":
+        try:
+            from db.session import SessionLocal
+            from db.models import Investigation
+
+            separate_db = SessionLocal()
+            try:
+                # Check idempotency: one open investigation per transaction
+                order_id_val = result["order_id"]
+                existing_inv = (
+                    separate_db.query(Investigation)
+                    .filter(
+                        Investigation.merchant_id == auth_merchant_id,
+                        Investigation.transaction_id == order_id_val,
+                        Investigation.status == "OPEN",
+                    )
+                    .first()
+                )
+                if not existing_inv:
+                    new_inv = Investigation(
+                        id=f"inv_{uuid.uuid4().hex[:8]}",
+                        merchant_id=auth_merchant_id,
+                        transaction_id=order_id_val,
+                        decision_id=decision_id,
+                        status="OPEN",
+                        source="AUTO_CRITICAL",
+                    )
+                    separate_db.add(new_inv)
+                    from disputes.step_logger import record_step, STEP_CASE_OPENED
+
+                    record_step(
+                        db=separate_db,
+                        merchant_id=auth_merchant_id,
+                        investigation_id=new_inv.id,
+                        step_type=STEP_CASE_OPENED,
+                        actor="system",
+                        actor_type="system",
+                        note=f"Case automatically opened for critical risk decision (action: {result.get('policy_action')}, severity: {result.get('severity')})",
+                    )
+                    separate_db.commit()
+            except Exception as e:
+                separate_db.rollback()
+                req_id = (
+                    request.headers.get("x-request-id", "unknown")
+                    if request
+                    else "unknown"
+                )
+                logger.error(f"[{req_id}] Failed to auto-open investigation: {e}")
+            finally:
+                separate_db.close()
+        except Exception as e:
+            req_id = (
+                request.headers.get("x-request-id", "unknown") if request else "unknown"
+            )
+            logger.error(
+                f"[{req_id}] Failed to acquire session for auto-open investigation: {e}"
+            )
 
     return ScoreResponse(**result)
 
@@ -240,7 +310,6 @@ def get_decision_by_id(
     )
 
 
-
 @router.get(
     "/v1/decisions/{decision_id}/audit",
     status_code=status.HTTP_200_OK,
@@ -304,7 +373,9 @@ def get_decision_audit_reconstruction(
         "status": "success",
         "data": {
             "decision": {
-                "decision_id": audit_row.decision_id or audit_row.order_id or audit_row.id,
+                "decision_id": audit_row.decision_id
+                or audit_row.order_id
+                or audit_row.id,
                 "order_id": audit_row.order_id,
                 "merchant_id": audit_row.merchant_id,
                 "channel": audit_row.channel,
@@ -312,11 +383,21 @@ def get_decision_audit_reconstruction(
                 "tier": audit_row.tier,
                 "model_version": audit_row.model_version,
                 "model_status": audit_row.model_status,
-                "threshold": float(audit_row.threshold) if audit_row.threshold is not None else 0.40,
-                "feature_completeness": float(audit_row.feature_completeness) if audit_row.feature_completeness is not None else 1.0,
+                "threshold": (
+                    float(audit_row.threshold)
+                    if audit_row.threshold is not None
+                    else 0.40
+                ),
+                "feature_completeness": (
+                    float(audit_row.feature_completeness)
+                    if audit_row.feature_completeness is not None
+                    else 1.0
+                ),
                 "explanation_status": audit_row.explanation_status,
                 "shadow": bool(audit_row.shadow),
-                "created_at": audit_row.created_at.isoformat() if audit_row.created_at else None,
+                "created_at": (
+                    audit_row.created_at.isoformat() if audit_row.created_at else None
+                ),
             },
             "policy_trace": {
                 "policy_rule": audit_row.policy_rule,
@@ -324,7 +405,11 @@ def get_decision_audit_reconstruction(
                 "suggested_action": audit_row.suggested_action,
                 "severity": audit_row.severity,
                 "tier": audit_row.tier,
-                "threshold": float(audit_row.threshold) if audit_row.threshold is not None else 0.40,
+                "threshold": (
+                    float(audit_row.threshold)
+                    if audit_row.threshold is not None
+                    else 0.40
+                ),
                 "rule_hits": rule_hits,
             },
             "shap_top_k": raw_reasons,

@@ -133,4 +133,28 @@ describe("Transport Core", () => {
       delete (globalThis as any).document;
     }
   });
+
+  it("calls fetch with globalThis receiver even when caller context is lost", async () => {
+    let capturedThis: any;
+    function mockFetch(this: any, _url: any, _init: any) {
+      capturedThis = this;
+      return Promise.resolve(
+        new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        })
+      );
+    }
+    const transport = new Transport({
+      baseUrl: "https://api.test",
+      apiKey: "rg_live_test",
+      fetch: mockFetch as any,
+    });
+    const res = await transport.request<{ ok: boolean }>({
+      method: "GET",
+      path: "/unbound-test",
+    });
+    expect(res).toEqual({ ok: true });
+    expect(capturedThis).toBe(globalThis);
+  });
 });

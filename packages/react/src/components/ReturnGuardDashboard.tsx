@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { DashboardShell } from './DashboardShell';
 import { OverviewPage } from './OverviewPage';
+import { InvestigationsPage } from './InvestigationsPage';
 import { TransactionsPage } from './TransactionsPage';
 import { CustomersPage } from './CustomersPage';
 import { RiskAnalyticsPage } from './RiskAnalyticsPage';
@@ -24,6 +25,7 @@ export const ReturnGuardDashboard: React.FC<ReturnGuardDashboardProps> = ({
   return (
     <DashboardShell currentTab={currentTab} onTabChange={setCurrentTab} brandTitle={brandTitle}>
       {currentTab === 'overview' && <OverviewPage />}
+      {currentTab === 'investigations' && <InvestigationsPage />}
       {currentTab === 'transactions' && <TransactionsPage />}
       {currentTab === 'customers' && <CustomersPage />}
       {currentTab === 'analytics' && <RiskAnalyticsPage />}

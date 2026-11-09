@@ -11,6 +11,7 @@ import {
   PipelineIcon,
   ReviewsIcon,
   ReportsIcon,
+  SearchIcon,
   SunIcon,
   MoonIcon,
   InfoIcon,
@@ -36,6 +37,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
 
   const navItems = [
     { id: 'overview', label: 'Overview', icon: OverviewIcon },
+    { id: 'investigations', label: 'Investigations', icon: SearchIcon },
     { id: 'transactions', label: 'Transactions', icon: TransactionsIcon },
     { id: 'customers', label: 'Customers', icon: CustomersIcon },
     { id: 'analytics', label: 'Risk Analytics', icon: AnalyticsIcon },
