@@ -7480,7 +7480,7 @@ var ReportsPage = () => {
         ] }),
         /* @__PURE__ */ jsxs17("tr", { children: [
           /* @__PURE__ */ jsx20("td", { className: "rg-reports-stat-label", children: "Tenant Scope" }),
-          /* @__PURE__ */ jsx20("td", { className: "rg-reports-stat-value", style: { fontFamily: "var(--rg-font-mono)" }, children: (summary == null ? void 0 : summary.tenant_id) || "merch_legacy" })
+          /* @__PURE__ */ jsx20("td", { className: "rg-reports-stat-value", style: { fontFamily: "var(--rg-font-mono)" }, children: (summary == null ? void 0 : summary.tenant_id) || "merch_shoppoint" })
         ] }),
         /* @__PURE__ */ jsxs17("tr", { children: [
           /* @__PURE__ */ jsx20("td", { className: "rg-reports-stat-label", children: "Serving Model" }),

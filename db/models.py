@@ -311,13 +311,8 @@ class Dispute(Base):
     evidences_requested_json = Column(Text, nullable=True)
     dispute_life_cycle_stage = Column(String(64), nullable=True)
 
-    @property
-    def paypal_dispute_id(self):
-        return self.external_dispute_id
-
-    @property
-    def reason(self):
-        return self.reason_code
+    paypal_dispute_id = Column(String(128), nullable=True)
+    reason = Column(String(128), nullable=True)
 
     payment = relationship("Payment")
     documents = relationship(

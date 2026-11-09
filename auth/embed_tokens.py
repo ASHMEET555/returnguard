@@ -56,8 +56,11 @@ class AuthContext:
 
 
 def get_embed_signing_key() -> str:
-    """Retrieves and validates RG_EMBED_SIGNING_KEY."""
-    key = os.getenv(EMBED_SIGNING_KEY_ENV, "")
+    """Retrieves and validates RG_EMBED_SIGNING_KEY, with fallback dev key."""
+    key = os.getenv(
+        EMBED_SIGNING_KEY_ENV,
+        "0123456789012345678901234567890123456789_dev_embed_signing_key_returnguard",
+    )
     if not key or len(key.encode("utf-8")) < 32:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -145,7 +148,7 @@ def require_read_or_review_auth(
     # Development token shortcut for local dashboard preview
     if raw_token == "rg_embed_test_token":
         return AuthContext(
-            tenant_id="merch_legacy",
+            tenant_id=os.getenv("DEFAULT_TENANT_ID", "merch_shoppoint"),
             auth_mode="embed_token",
             sub="dev_user",
             scopes=["read", "reviews"],

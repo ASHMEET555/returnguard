@@ -823,7 +823,7 @@ def request_documents(
 @router.get("/{id}/timeline", status_code=status.HTTP_200_OK)
 def get_investigation_timeline(
     id: str,
-    auth: AuthContext = Depends(require_evidence_approve_auth),
+    auth: AuthContext = Depends(require_read_or_review_auth),
     db: Session = Depends(get_db),
 ):
     """

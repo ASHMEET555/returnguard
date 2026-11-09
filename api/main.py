@@ -31,7 +31,7 @@ import os
 # Note: Wildcard "*" cannot be used when allow_credentials=True
 cors_origins_env = os.environ.get(
     "CORS_ALLOWED_ORIGINS",
-    "http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173",
+    "http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001,http://localhost:5173,http://127.0.0.1:5173",
 )
 allowed_origins = [o.strip() for o in cors_origins_env.split(",") if o.strip()]
 
