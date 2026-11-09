@@ -9,7 +9,7 @@ COPY web/ ./web/
 # Build @returnguard/react package first
 WORKDIR /app/packages/react
 RUN npm install
-RUN tsup && node -e \"fs.copyFileSync('src/styles.css', 'dist/styles.css')\"
+RUN npm run build
 
 # Build Next.js application
 WORKDIR /app/web
