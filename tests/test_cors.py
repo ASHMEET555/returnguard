@@ -21,6 +21,22 @@ def test_cors_preflight_allowed_origin():
     assert response.headers.get("access-control-allow-credentials") == "true"
 
 
+def test_cors_preflight_onrender_origin():
+    """Test preflight OPTIONS returns CORS allow headers for onrender.com origins."""
+    client = TestClient(app)
+    headers = {
+        "Origin": "https://returnguard-web-xxxx.onrender.com",
+        "Access-Control-Request-Method": "GET",
+        "Access-Control-Request-Headers": "Authorization, Content-Type",
+    }
+    response = client.options("/v1/analytics/summary", headers=headers)
+    assert response.status_code == 200
+    assert (
+        response.headers.get("access-control-allow-origin") == "https://returnguard-web-xxxx.onrender.com"
+    )
+    assert response.headers.get("access-control-allow-credentials") == "true"
+
+
 def test_cors_disallowed_origin():
     """Test requests from disallowed origin do not receive access-control-allow-origin."""
     client = TestClient(app)

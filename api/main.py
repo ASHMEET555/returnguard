@@ -27,21 +27,36 @@ app = FastAPI(
 
 import os
 
-# Configure CORS origins from environment, defaulting to standard local dev ports
-# Note: Wildcard "*" cannot be used when allow_credentials=True
-cors_origins_env = os.environ.get(
-    "CORS_ALLOWED_ORIGINS",
-    "http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001,http://localhost:5173,http://127.0.0.1:5173",
-)
-allowed_origins = [o.strip() for o in cors_origins_env.split(",") if o.strip()]
+# Configure CORS origins from environment with automatic cloud platform support
+cors_origins_env = os.environ.get("CORS_ALLOWED_ORIGINS") or os.environ.get("CORS_ORIGINS") or ""
+cors_origins_list = [o.strip() for o in cors_origins_env.split(",") if o.strip()]
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=allowed_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+if "*" in cors_origins_list or cors_origins_env.strip() == "*":
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origin_regex=r"^https?://.*",
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+else:
+    default_origins = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]
+    allowed_origins = list(set(default_origins + cors_origins_list))
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=allowed_origins,
+        allow_origin_regex=r"^https://([a-zA-Z0-9-]+\.)*(onrender\.com|vercel\.app|netlify\.app)(:\d+)?$",
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 # Wire auth routes
 app.include_router(auth_router)
