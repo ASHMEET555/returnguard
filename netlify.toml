@@ -1,5 +1,5 @@
 [build]
-  command = "npm --prefix packages/react install && npm --prefix packages/react run build && npm --prefix web install && npm --prefix web run build"
+  command = "npm --prefix packages/sdk install && npm --prefix packages/sdk run build && npm --prefix packages/react install && npm --prefix packages/react run build && npm --prefix web install && npm --prefix web run build"
   publish = "web/.next"
 
 [build.environment]

@@ -6,7 +6,12 @@ WORKDIR /app
 COPY packages/ ./packages/
 COPY web/ ./web/
 
-# Build @returnguard/react package first
+# Build @returnguard/sdk first
+WORKDIR /app/packages/sdk
+RUN npm install
+RUN npm run build
+
+# Build @returnguard/react second
 WORKDIR /app/packages/react
 RUN npm install
 RUN npm run build
