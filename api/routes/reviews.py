@@ -184,6 +184,34 @@ def submit_review(
     db.add(audit_entry)
     db.commit()
 
+    # Dispatch resolution to merchant payment service (ShopPoint)
+    import json
+    import os
+    import urllib.request
+    shoppoint_url = os.getenv("SHOPPOINT_API_URL", "http://127.0.0.1:5000")
+    if auth.tenant_id in ("merch_shoppoint", "merchant_shoppoint"):
+        try:
+            req_data = json.dumps({
+                "decision_id": payload.decision_id,
+                "order_id": decision.order_id,
+                "action": payload.action,
+                "notes": payload.notes,
+                "reviewer": actor,
+            }).encode("utf-8")
+            post_req = urllib.request.Request(
+                f"{shoppoint_url}/api/v1/payments/internal/review-execute",
+                data=req_data,
+                headers={
+                    "Content-Type": "application/json",
+                    "X-ReturnGuard-Sync": "true",
+                },
+                method="POST",
+            )
+            with urllib.request.urlopen(post_req, timeout=5) as _:
+                pass
+        except Exception:
+            pass
+
     return ReviewSubmitResponse(
         review_id=review_id,
         decision_id=payload.decision_id,

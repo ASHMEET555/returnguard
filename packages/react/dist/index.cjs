@@ -7484,7 +7484,7 @@ var ReportsPage = () => {
         ] }),
         /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("tr", { children: [
           /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("td", { className: "rg-reports-stat-label", children: "Tenant Scope" }),
-          /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("td", { className: "rg-reports-stat-value", style: { fontFamily: "var(--rg-font-mono)" }, children: (summary == null ? void 0 : summary.tenant_id) || "merch_legacy" })
+          /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("td", { className: "rg-reports-stat-value", style: { fontFamily: "var(--rg-font-mono)" }, children: (summary == null ? void 0 : summary.tenant_id) || "merch_shoppoint" })
         ] }),
         /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("tr", { children: [
           /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("td", { className: "rg-reports-stat-label", children: "Serving Model" }),
