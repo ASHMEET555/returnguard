@@ -4,7 +4,7 @@
 
 ReturnGuard recommends. The merchant executes. It never moves money, cancels orders, or files disputes on its own.
 
-**ShopPoint** (`/ShopPoint`) is the reference merchant integration. It is a demonstration application, not the ReturnGuard product.
+**ShopPoint** (`/ShopPoint`) is the reference merchant. It is a demonstration application, not the ReturnGuard product.
 
 Hackathon: Build What's Next with PayPal and AI.
 
