@@ -68,11 +68,11 @@ Exit: pending the items above. Do not claim Phase D complete until the D3 signat
 
 - [x] Inventory every route's auth status (verified: /health unauthenticated; all /v1/* routes require Bearer API key; unversioned /score removed)
 - [x] Remove PayPal credentials from ReturnGuard (.env.example, payments/webhooks.py cleaned; ShopPoint is sole PayPal client)
-- [x] merchants (tenant entity per D-E1), pi_keys tables; hashed keys; one-time display; rotation and revocation (scripts/create_api_key.py, legacy sentinel merch_legacy refused)
+- [x] merchants (tenant entity per D-E1),  pi_keys tables; hashed keys; one-time display; rotation and revocation (scripts/create_api_key.py, legacy sentinel merch_legacy refused)
 - [x] merchant_id added to tenant-scoped tables with compound keys and indexes (idempotent migration db/migrations.py)
-- [x] Server-key authentication on all routes except health (uth/dependencies.py with get_current_merchant_id)
+- [x] Server-key authentication on all routes except health ( uth/dependencies.py with get_current_merchant_id)
 - [x] Repository layer requires tenant argument (TenantScopedRepository in db/repositories/tenant_scoped.py)
-- [x] Per-tenant rate limits (uth/ratelimit.py in-memory sliding window, 429 with Retry-After)
+- [x] Per-tenant rate limits ( uth/ratelimit.py in-memory sliding window, 429 with Retry-After)
 - [x] Policy, shadow and audit reconstruction scoped by tenant (GET /v1/decisions/{id}/audit, 404 for cross-tenant)
 - [x] Tests: unauthenticated → 401; cross-tenant ID → 404; conflicting body merchant_id → 400; legacy merchant refused
 - [x] Migrate 	est_webhooks.py to ShopPoint relay (POST /v1/transactions/events), disable raw route (POST /v1/paypal/webhooks returns 410 Gone)
@@ -117,18 +117,58 @@ Exit: components render with mocked and live data in ShopPoint on React 16.13; `
 
 Exit: live decisions shown for ShopPoint's tenant; review reaches PayPal idempotently; cross-tenant access blocked.
 
-## Phase I — Evidence Engine [TODO]
+## Phase I — Evidence Engine [DONE]
 
-- [ ] Evidence ingestion and storage, tenant-scoped
-- [ ] Association of evidence with payment and dispute
-- [ ] Completeness assessment and missing-document list
-- [ ] Grounded narrative draft (LLM outside the risk path)
-- [ ] Guardrail: injected ID, amount, tracking number rejected in test
-- [ ] JSON and Markdown evidence pack from stored rows
-- [ ] Human approval record required before submit
-- [ ] Submit executed by ShopPoint; sandbox-gated
+- [x] Evidence ingestion and storage, tenant-scoped (`tests/test_phase_i_step0.py`, `tests/test_phase_i_step1.py`)
+- [x] Association of evidence with payment and dispute (`tests/test_phase_i_step1.py`)
+- [x] Completeness assessment and missing-document list (`tests/test_phase_i_step1.py`)
+- [x] Grounded narrative draft (LLM outside the risk path) (`tests/test_phase_i_step3.py`)
+- [x] Guardrail: injected ID, amount, tracking number rejected in test (`tests/test_phase_i_step3.py`)
+- [x] JSON and Markdown evidence pack from stored rows (`tests/test_phase_i_step4.py`)
+- [x] Human approval record required before submit (`tests/test_phase_i_step4.py`)
+- [x] Submit executed by ShopPoint; sandbox-gated (`tests/test_phase_i_step4.py`)
 
 Exit: pack generated from stored rows; guardrail test passes; submission refused without approval.
+
+## Phase I-R — Reviewer Workflow & Dashboard [DONE]
+
+- [x] Reviewer state machine with close notes (`disputes/state_machine.py`, `tests/test_phase_i_step_c1.py`)
+  * `test_allowed_transitions_succeed`: all valid transitions succeed
+  * `test_disallowed_transition_returns_409`: invalid transitions return 409
+  * `test_close_without_note_or_short_note_returns_422`: note < 20 chars returns 422
+  * `test_close_as_approved_without_active_approval_returns_409`: approved close requires pack approval
+  * `test_close_without_recorded_steps_returns_422`: closing requires recorded steps
+  * `test_reopen_without_reason_returns_422`: reopening requires reason
+  * `test_reopen_active_investigation_returns_409`: only closed cases can reopen
+  * `test_cross_tenant_transition_returns_404`: cross-tenant access returns 404
+- [x] Auto-open investigation on critical score (`api/routes/score.py`, `tests/test_phase_i_step_c2.py`)
+  * `test_critical_severity_score_auto_opens_investigation`: critical score creates open investigation
+  * `test_block_policy_action_score_auto_opens_investigation`: block policy action auto-opens
+  * `test_auto_open_is_idempotent_per_transaction`: duplicate scores do not create extra cases
+  * `test_low_risk_score_does_not_open_investigation`: low risk does not auto-open
+  * `test_auto_open_failure_does_not_fail_or_alter_score`: DB failure never breaks score response
+- [x] Append-only step log table (`db/models.py`, `disputes/step_logger.py`, `tests/test_phase_i_step_c3.py`)
+  * `test_investigation_step_logging_and_types`: records step types, actor, notes, pack_hash
+  * `test_pack_approval_and_rejection_record_steps`: approval records steps
+  * `test_cross_tenant_step_recording_isolation`: steps are tenant-isolated
+- [x] Reviewer API additions with auth guards (`api/routes/investigations.py`, `tests/test_phase_i_step_c4.py`)
+  * `test_start_review_transitions_open_to_in_review`: starts review
+  * `test_add_note_records_step`: records note step
+  * `test_request_documents_records_missing_types_step`: logs requested types
+  * `test_timeline_endpoint_returns_chronological_steps`: timeline returns ordered history
+  * `test_reviewer_actions_reject_server_api_keys_with_403`: server keys return 403 on reviewer actions
+- [x] LLM assessment visibility view (`api/routes/investigations.py`, `tests/test_phase_i_step_c5.py`)
+  * `test_assessment_endpoint_returns_model_trace_and_advisory_label`: includes model, attempts, advisory label
+  * `test_assessment_reports_template_fallback_on_validator_failure`: reports fallback badge
+  * `test_assessment_endpoint_rejects_cross_tenant_access_with_404`: tenant isolation
+  * `test_assessment_endpoint_does_not_leak_real_ids_or_private_mapping`: no raw entity leaks
+- [x] Reviewer Dashboard frontend & component tests (`packages/react`, `web/`, `packages/react/test/investigations.test.tsx`)
+  * `Queue loads and filters by status`: status filter buttons and row display
+  * `Case view renders the advisory label, the findings, and the validator trace`: advisory banner, findings A1/A2, trace
+  * `Disabled button state matches the state machine (Close disabled when OPEN; Reopen disabled when IN_REVIEW)`: strict UI state machine guards
+  * `Successful close flow: review started -> note added -> pack approved -> closed with note`: full review flow simulation
+
+Exit: full reviewer state machine verified; critical score auto-opens; step timeline immutable; LLM advisory panel clearly labeled; frontend component tests pass; risk-path invariance preserved.
 
 ## Phase J — Submission [TODO]
 

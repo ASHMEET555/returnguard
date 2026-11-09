@@ -19,13 +19,19 @@ from db.models import (
     Customer,
     Device,
     Dispute,
+    DisputeDocument,
+    EvidenceApproval,
     EvidencePack,
     EvidenceSubmission,
+    Investigation,
+    InvestigationFinding,
+    LLMRun,
     MerchantAudit,
     Order,
     Payment,
     PaymentEvent,
     Refund,
+    SubmissionResult,
 )
 
 
@@ -55,12 +61,9 @@ class TenantScopedRepository:
         self, customer_id: str, as_of: Optional[datetime.datetime] = None
     ) -> List[Order]:
         """Fetch prior orders for customer strictly within this merchant's scope."""
-        query = (
-            self.db.query(Order)
-            .filter(
-                Order.merchant_id == self.merchant_id,
-                Order.customer_id == customer_id,
-            )
+        query = self.db.query(Order).filter(
+            Order.merchant_id == self.merchant_id,
+            Order.customer_id == customer_id,
         )
         if as_of is not None:
             query = query.filter(Order.order_time <= as_of)
@@ -220,25 +223,32 @@ class TenantScopedRepository:
         Limit capped at 100.
         """
         import base64
+
         limit = max(1, min(limit, 100))
-        query = (
-            self.db.query(AuditScoreEvent)
-            .filter(AuditScoreEvent.merchant_id == self.merchant_id)
+        query = self.db.query(AuditScoreEvent).filter(
+            AuditScoreEvent.merchant_id == self.merchant_id
         )
 
         if cursor:
             try:
-                decoded = base64.urlsafe_b64decode(cursor.encode("utf-8")).decode("utf-8")
+                decoded = base64.urlsafe_b64decode(cursor.encode("utf-8")).decode(
+                    "utf-8"
+                )
                 c_created_str, c_id = decoded.split("|", 1)
                 c_created = datetime.datetime.fromisoformat(c_created_str)
                 query = query.filter(
                     (AuditScoreEvent.created_at < c_created)
-                    | ((AuditScoreEvent.created_at == c_created) & (AuditScoreEvent.id < c_id))
+                    | (
+                        (AuditScoreEvent.created_at == c_created)
+                        & (AuditScoreEvent.id < c_id)
+                    )
                 )
             except Exception:
                 pass
 
-        query = query.order_by(AuditScoreEvent.created_at.desc(), AuditScoreEvent.id.desc())
+        query = query.order_by(
+            AuditScoreEvent.created_at.desc(), AuditScoreEvent.id.desc()
+        )
         items = query.limit(limit + 1).all()
 
         next_cursor = None
@@ -246,6 +256,241 @@ class TenantScopedRepository:
             items = items[:limit]
             last_item = items[-1]
             raw_c = f"{last_item.created_at.isoformat()}|{last_item.id}"
-            next_cursor = base64.urlsafe_b64encode(raw_c.encode("utf-8")).decode("utf-8")
+            next_cursor = base64.urlsafe_b64encode(raw_c.encode("utf-8")).decode(
+                "utf-8"
+            )
+
+        return items, next_cursor
+
+    # --- Phase I: Dispute, Investigation, Document, and Evidence Operations ---
+
+    def upsert_dispute(
+        self,
+        external_dispute_id: str,
+        reason_code: str,
+        status: str,
+        amount: float,
+        currency: str = "USD",
+        transaction_id: Optional[str] = None,
+        payment_id: Optional[str] = None,
+        opened_at: Optional[datetime.datetime] = None,
+    ) -> Dispute:
+        """Upsert a dispute by (merchant_id, external_dispute_id)."""
+        dispute = (
+            self.db.query(Dispute)
+            .filter(
+                Dispute.merchant_id == self.merchant_id,
+                Dispute.external_dispute_id == external_dispute_id,
+            )
+            .first()
+        )
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        if dispute:
+            dispute.reason_code = reason_code
+            dispute.status = status
+            dispute.amount = amount
+            dispute.currency = currency
+            if transaction_id is not None:
+                dispute.transaction_id = transaction_id
+            if payment_id is not None:
+                dispute.payment_id = payment_id
+            if opened_at is not None:
+                dispute.opened_at = opened_at
+            dispute.received_at = now
+        else:
+            dispute = Dispute(
+                id=f"disp_{uuid.uuid4().hex[:16]}",
+                merchant_id=self.merchant_id,
+                external_dispute_id=external_dispute_id,
+                transaction_id=transaction_id,
+                payment_id=payment_id,
+                reason_code=reason_code,
+                status=status,
+                amount=amount,
+                currency=currency,
+                opened_at=opened_at or now,
+                received_at=now,
+                created_at=now,
+            )
+            self.db.add(dispute)
+
+        self.db.commit()
+        self.db.refresh(dispute)
+        return dispute
+
+    def get_dispute(self, dispute_id: str) -> Optional[Dispute]:
+        """Fetch dispute by internal id or external_dispute_id strictly within tenant scope."""
+        return (
+            self.db.query(Dispute)
+            .filter(
+                Dispute.merchant_id == self.merchant_id,
+                (Dispute.id == dispute_id)
+                | (Dispute.external_dispute_id == dispute_id),
+            )
+            .first()
+        )
+
+    def list_disputes(
+        self,
+        status: Optional[str] = None,
+        cursor: Optional[str] = None,
+        limit: int = 50,
+    ) -> tuple[List[Dispute], Optional[str]]:
+        """List disputes for this tenant with cursor pagination."""
+        import base64
+
+        limit = max(1, min(limit, 100))
+        query = self.db.query(Dispute).filter(Dispute.merchant_id == self.merchant_id)
+        if status:
+            query = query.filter(Dispute.status == status)
+
+        if cursor:
+            try:
+                decoded = base64.urlsafe_b64decode(cursor.encode("utf-8")).decode(
+                    "utf-8"
+                )
+                c_created_str, c_id = decoded.split("|", 1)
+                c_created = datetime.datetime.fromisoformat(c_created_str)
+                query = query.filter(
+                    (Dispute.received_at < c_created)
+                    | ((Dispute.received_at == c_created) & (Dispute.id < c_id))
+                )
+            except Exception:
+                pass
+
+        query = query.order_by(Dispute.received_at.desc(), Dispute.id.desc())
+        items = query.limit(limit + 1).all()
+
+        next_cursor = None
+        if len(items) > limit:
+            items = items[:limit]
+            last_item = items[-1]
+            raw_c = f"{last_item.received_at.isoformat()}|{last_item.id}"
+            next_cursor = base64.urlsafe_b64encode(raw_c.encode("utf-8")).decode(
+                "utf-8"
+            )
+
+        return items, next_cursor
+
+    def add_dispute_document(
+        self,
+        dispute_id: str,
+        evidence_type: str,
+        filename: str,
+        text_content: str,
+        sha256: str,
+        byte_size: int,
+    ) -> DisputeDocument:
+        """Store a document associated with a dispute under tenant isolation."""
+        doc = DisputeDocument(
+            id=f"doc_{uuid.uuid4().hex[:16]}",
+            merchant_id=self.merchant_id,
+            dispute_id=dispute_id,
+            evidence_type=evidence_type,
+            filename=filename,
+            text_content=text_content,
+            sha256=sha256,
+            byte_size=byte_size,
+            received_at=datetime.datetime.now(datetime.timezone.utc),
+        )
+        self.db.add(doc)
+        self.db.commit()
+        self.db.refresh(doc)
+        return doc
+
+    def get_dispute_documents(self, dispute_id: str) -> List[DisputeDocument]:
+        """Fetch all documents for a dispute under tenant isolation."""
+        return (
+            self.db.query(DisputeDocument)
+            .filter(
+                DisputeDocument.merchant_id == self.merchant_id,
+                DisputeDocument.dispute_id == dispute_id,
+            )
+            .order_by(DisputeDocument.received_at.asc())
+            .all()
+        )
+
+    def get_or_create_investigation(self, dispute_id: str) -> Investigation:
+        """Get or create the investigation case for a dispute."""
+        inv = (
+            self.db.query(Investigation)
+            .filter(
+                Investigation.merchant_id == self.merchant_id,
+                Investigation.dispute_id == dispute_id,
+            )
+            .first()
+        )
+        if not inv:
+            now = datetime.datetime.now(datetime.timezone.utc)
+            inv = Investigation(
+                id=f"inv_{uuid.uuid4().hex[:16]}",
+                merchant_id=self.merchant_id,
+                dispute_id=dispute_id,
+                status="OPEN",
+                created_at=now,
+                updated_at=now,
+            )
+            self.db.add(inv)
+            self.db.commit()
+            self.db.refresh(inv)
+        return inv
+
+    def get_investigation(self, investigation_id: str) -> Optional[Investigation]:
+        """Fetch investigation strictly within tenant scope."""
+        return (
+            self.db.query(Investigation)
+            .filter(
+                Investigation.merchant_id == self.merchant_id,
+                (Investigation.id == investigation_id)
+                | (Investigation.dispute_id == investigation_id),
+            )
+            .first()
+        )
+
+    def list_investigations(
+        self,
+        status: Optional[str] = None,
+        cursor: Optional[str] = None,
+        limit: int = 50,
+    ) -> tuple[List[Investigation], Optional[str]]:
+        """Cursor-paginated list of investigations for this tenant."""
+        import base64
+
+        limit = max(1, min(limit, 100))
+        query = self.db.query(Investigation).filter(
+            Investigation.merchant_id == self.merchant_id
+        )
+        if status:
+            query = query.filter(Investigation.status == status)
+
+        if cursor:
+            try:
+                decoded = base64.urlsafe_b64decode(cursor.encode("utf-8")).decode(
+                    "utf-8"
+                )
+                c_created_str, c_id = decoded.split("|", 1)
+                c_created = datetime.datetime.fromisoformat(c_created_str)
+                query = query.filter(
+                    (Investigation.created_at < c_created)
+                    | (
+                        (Investigation.created_at == c_created)
+                        & (Investigation.id < c_id)
+                    )
+                )
+            except Exception:
+                pass
+
+        query = query.order_by(Investigation.created_at.desc(), Investigation.id.desc())
+        items = query.limit(limit + 1).all()
+
+        next_cursor = None
+        if len(items) > limit:
+            items = items[:limit]
+            last_item = items[-1]
+            raw_c = f"{last_item.created_at.isoformat()}|{last_item.id}"
+            next_cursor = base64.urlsafe_b64encode(raw_c.encode("utf-8")).decode(
+                "utf-8"
+            )
 
         return items, next_cursor

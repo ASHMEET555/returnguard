@@ -277,3 +277,127 @@ export interface RiskTrendsResponse {
   policy_breakdown: Record<string, number>;
   dispute_analytics: DisputeAnalytics;
 }
+
+export interface InvestigationListItem {
+  id: string;
+  dispute_id: string | null;
+  transaction_id?: string | null;
+  status: string;
+  source?: string;
+  created_at: string;
+  updated_at: string;
+  case_hash: string;
+}
+
+export interface InvestigationListParams {
+  status?: string;
+  cursor?: string;
+  limit?: number;
+}
+
+export interface InvestigationListResponse {
+  items: InvestigationListItem[];
+  next_cursor: string | null;
+  has_more: boolean;
+}
+
+export interface InvestigationFinding {
+  finding_id: string;
+  alias_id: string;
+  category: string;
+  statement: string;
+  source_doc_id: string;
+  source_filename: string;
+  confidence: number;
+  relevance: string;
+}
+
+export interface InvestigationAssessment {
+  investigation_id: string;
+  model: string;
+  prompt_hash: string;
+  attempt_count: number;
+  validator_errors: string[][];
+  final_status: "VALIDATED" | "TEMPLATE_FALLBACK";
+  final_text: string;
+  findings_cited: string[];
+  advisory_label: string;
+  created_at: string;
+}
+
+export interface InvestigationTimelineStep {
+  id: string;
+  step_type: string;
+  actor: string;
+  actor_type: string;
+  note?: string | null;
+  pack_hash?: string | null;
+  created_at: string;
+}
+
+export interface InvestigationTimelineResponse {
+  investigation_id: string;
+  total_steps: number;
+  steps: InvestigationTimelineStep[];
+}
+
+export interface InvestigationDetail {
+  id: string;
+  dispute_id: string | null;
+  transaction_id: string | null;
+  decision_id: string | null;
+  status: string;
+  source?: string;
+  created_at: string;
+  updated_at: string;
+  case_hash: string;
+  external_dispute_id?: string | null;
+  reason_code: string;
+  amount: number;
+  currency: string;
+  findings: InvestigationFinding[];
+  advisory_assessment?: {
+    disclaimer: string;
+    narrative?: string | null;
+  };
+  decision_record?: {
+    severity?: string;
+    tier?: string;
+    risk_score?: number;
+    probability?: number;
+    policy_action?: string;
+    shap_top_k?: ReasonCode[];
+  };
+  approval?: {
+    is_approved: boolean;
+    decision: string;
+    approver_sub?: string | null;
+    decided_at?: string | null;
+    pack_hash?: string | null;
+  };
+  completeness?: {
+    score: number;
+    is_complete: boolean;
+    missing_kinds: string[];
+    reasons: string[];
+  };
+}
+
+export interface CloseInvestigationPayload {
+  outcome: string;
+  note: string;
+  steps_performed?: string[];
+}
+
+export interface TransactionInvestigationResponse {
+  id: string;
+  merchant_id: string;
+  transaction_id: string;
+  decision_id?: string | null;
+  dispute_id?: string | null;
+  status: string;
+  source: string;
+  case_hash?: string | null;
+  created_at: string;
+  updated_at: string;
+}

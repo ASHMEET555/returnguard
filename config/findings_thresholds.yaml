@@ -1,0 +1,38 @@
+"""Assumptions and thresholds for Phase I deterministic findings."""
+
+finding_rules:
+  F-REFUND-COUNT:
+    threshold_refund_count: 2
+    lookback_days: 180
+    severity: "HIGH"
+    description: "Customer account has received more than 2 refunds across all orders in the preceding 180 days."
+
+  F-DELIVERED-THEN-REFUND:
+    lookback_days: 180
+    severity: "CRITICAL"
+    description: "Prior order was confirmed delivered by carrier tracking and subsequently refunded."
+
+  F-ADDRESS-MATCH-PRIOR:
+    severity: "INFO"
+    description: "Delivery address matches an address previously used on an earlier order with no disputes."
+
+  F-ADDRESS-SHARED:
+    threshold_shared_accounts: 2
+    severity: "MEDIUM"
+    description: "Delivery address has been shared with 2 or more distinct customer accounts."
+
+  F-VELOCITY-PRIOR:
+    threshold_orders: 3
+    window_hours: 24
+    severity: "HIGH"
+    description: "Customer placed 3 or more orders within a 24-hour window in the preceding 180 days."
+
+  F-PRIOR-DISPUTES:
+    threshold_dispute_count: 1
+    lookback_days: 180
+    severity: "CRITICAL"
+    description: "Customer or payment source has 1 or more prior disputes in the preceding 180 days."
+
+  F-EVIDENCE-MISSING:
+    severity: "MEDIUM"
+    description: "One or more required evidence documents for the dispute reason code are missing."
