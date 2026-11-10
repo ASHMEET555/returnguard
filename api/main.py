@@ -1,5 +1,9 @@
 """ReturnGuard FastAPI Application Entrypoint."""
 
+from contextlib import asynccontextmanager
+import logging
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -18,14 +22,27 @@ from api.routes import (
     webhooks,
 )
 from auth.embed_tokens import router as auth_router
+from db.seed import init_and_seed_db
+
+logger = logging.getLogger("returnguard.api")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan: initialize database tables and seed default data on startup."""
+    try:
+        init_and_seed_db()
+    except Exception as exc:
+        logger.error("Failed to initialize or seed database: %s", exc, exc_info=True)
+    yield
+
 
 app = FastAPI(
     title="ReturnGuard API",
     description="AI-powered return-abuse risk detection and dispute evidence API",
     version="0.1.0",
+    lifespan=lifespan,
 )
-
-import os
 
 # Configure CORS origins from environment with automatic cloud platform support
 cors_origins_env = os.environ.get("CORS_ALLOWED_ORIGINS") or os.environ.get("CORS_ORIGINS") or ""
