@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.routes import (
+    admin,
     analytics,
     assistant,
     customers,
@@ -91,6 +92,7 @@ app.include_router(disputes.router)
 app.include_router(investigations.router)
 app.include_router(transactions_investigation.router)
 app.include_router(assistant.router)
+app.include_router(admin.router)
 
 
 @app.get("/health")
