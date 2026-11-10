@@ -16,7 +16,7 @@
     "./styles.css": "./dist/styles.css"
   },
   "scripts": {
-    "build": "tsup && node -e \"fs.copyFileSync('src/styles.css', 'dist/styles.css')\"",
+    "build": "tsup && node -e \"fs.copyFileSync('src/styles.css', 'dist/styles.css'); fs.copyFileSync('src/styles.css', 'styles.css')\"",
     "test": "vitest run",
     "lint": "oxlint"
   },

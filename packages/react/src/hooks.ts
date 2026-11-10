@@ -285,3 +285,67 @@ export function useModelPerformance() {
 
   return { data, loading, error };
 }
+
+export function useReviewQueue(limit: number = 50, statusFilter?: string) {
+  const { client, configuration } = useReturnGuard();
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<Error | null>(null);
+  const [actionLoading, setActionLoading] = useState<boolean>(false);
+
+  const fetchReviews = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await client.reviews.list({ limit, status: statusFilter });
+      setReviews(res.items || []);
+      return res.items || [];
+    } catch (err: unknown) {
+      const errorObj = err instanceof Error ? err : new Error(String(err));
+      setError(errorObj);
+      return [];
+    } finally {
+      setLoading(false);
+    }
+  }, [client, limit, statusFilter]);
+
+  useEffect(() => {
+    fetchReviews();
+  }, [fetchReviews]);
+
+  const submitReview = useCallback(
+    async (decisionId: string, action: 'APPROVE' | 'REJECT', notes?: string) => {
+      setActionLoading(true);
+      try {
+        if (configuration?.onReviewAction) {
+          await configuration.onReviewAction(decisionId, action, notes);
+        }
+        const sdkAction = (action.toLowerCase() === 'approve' ? 'approve' : 'reject') as 'approve' | 'reject';
+        const result = await client.reviews.submit({
+          decision_id: decisionId,
+          action: sdkAction,
+          notes: notes || `Merchant review: ${action}`,
+        });
+        await fetchReviews();
+        return result;
+      } catch (err: unknown) {
+        throw err instanceof Error ? err : new Error(String(err));
+      } finally {
+        setActionLoading(false);
+      }
+    },
+    [client, fetchReviews, configuration]
+  );
+
+  return {
+    reviews,
+    items: reviews,
+    loading,
+    error,
+    actionLoading,
+    refetch: fetchReviews,
+    submitReview,
+    approve: (decisionId: string, notes?: string) => submitReview(decisionId, 'APPROVE', notes),
+    reject: (decisionId: string, notes?: string) => submitReview(decisionId, 'REJECT', notes),
+  };
+}

@@ -1,7 +1,17 @@
 import React from 'react';
 import * as _returnguard_sdk from '@returnguard/sdk';
 import { ReturnGuardClient, ClientOptions, CustomerProfileResponse, ModelPerformance, ReviewsListResponse, ScoreResult, AnalyticsSummary, RiskTrendsResponse, DecisionAuditReconstruction, InvestigationDetail, InvestigationAssessment, InvestigationTimelineStep, InvestigationListItem } from '@returnguard/sdk';
+import { ColDef } from 'ag-grid-community';
 
+interface MerchantDashboardConfig {
+    brandTitle?: string;
+    merchantName?: string;
+    currency?: string;
+    workspaces?: string[];
+    layout?: 'tabs' | 'sidebar' | 'stacked';
+    showAttribution?: boolean;
+    onReviewAction?: (decisionId: string, action: 'APPROVE' | 'REJECT', notes?: string) => Promise<void> | void;
+}
 interface ReturnGuardContextValue {
     client: ReturnGuardClient;
     theme: 'dark' | 'light';
@@ -10,10 +20,12 @@ interface ReturnGuardContextValue {
     setCurrency: (currency: string) => void;
     dateRange: string;
     setDateRange: (range: string) => void;
+    configuration?: MerchantDashboardConfig;
 }
 interface ReturnGuardProviderProps {
     client?: ReturnGuardClient;
     clientOptions?: ClientOptions;
+    configuration?: MerchantDashboardConfig;
     defaultTheme?: 'dark' | 'light';
     defaultCurrency?: string;
     children: React.ReactNode;
@@ -74,19 +86,133 @@ declare function useModelPerformance(): {
     loading: boolean;
     error: Error | null;
 };
+declare function useReviewQueue(limit?: number, statusFilter?: string): {
+    reviews: any[];
+    items: any[];
+    loading: boolean;
+    error: Error | null;
+    actionLoading: boolean;
+    refetch: () => Promise<_returnguard_sdk.ReviewItem[]>;
+    submitReview: (decisionId: string, action: "APPROVE" | "REJECT", notes?: string) => Promise<_returnguard_sdk.ReviewSubmitResult>;
+    approve: (decisionId: string, notes?: string) => Promise<_returnguard_sdk.ReviewSubmitResult>;
+    reject: (decisionId: string, notes?: string) => Promise<_returnguard_sdk.ReviewSubmitResult>;
+};
 
 interface BadgeProps {
     score?: number;
+    tier?: string;
     severity?: string;
     action?: string;
     className?: string;
 }
+type RiskBadgeProps = BadgeProps;
 /**
  * Compact, professional status badge for risk scores, policy actions, and severity levels.
  * Adheres to Stripe & Linear visual restraint, high contrast in light/dark themes, and
  * consistent monospace score values without decorative emojis or oversized bubbles.
  */
 declare const RiskBadge: React.FC<BadgeProps>;
+
+interface RiskScoreBadgeProps extends RiskBadgeProps {
+    size?: 'sm' | 'md' | 'lg';
+}
+declare const RiskScoreBadge: React.FC<RiskScoreBadgeProps>;
+
+interface RiskSummaryProps {
+    data?: AnalyticsSummary;
+    loading?: boolean;
+    onRefresh?: () => void;
+    metrics?: ('total' | 'allow' | 'review' | 'block' | 'avgScore' | 'volume')[];
+    title?: string;
+    subtitle?: string;
+    className?: string;
+}
+declare const RiskSummary: React.FC<RiskSummaryProps>;
+
+interface RiskDecisionGridProps {
+    items?: ScoreResult[];
+    loading?: boolean;
+    columns?: ColDef<ScoreResult>[];
+    pageSize?: number;
+    height?: string | number;
+    quickFilter?: boolean;
+    onRowClick?: (id: string, decision: ScoreResult) => void;
+    onRefresh?: () => void;
+    title?: string;
+}
+declare const RiskDecisionGrid: React.FC<RiskDecisionGridProps>;
+
+interface ReviewItem {
+    id?: string;
+    decision_id: string;
+    order_id?: string;
+    channel?: string;
+    risk_score: number;
+    tier?: string;
+    policy_action?: string;
+    status?: string;
+    rule_hits?: string[];
+    created_at?: string;
+    notes?: string;
+    amount?: number;
+    customer_id?: string;
+}
+interface ReviewQueueProps {
+    items?: ReviewItem[];
+    loading?: boolean;
+    onApprove?: (decisionId: string, notes?: string) => Promise<void> | void;
+    onReject?: (decisionId: string, notes?: string) => Promise<void> | void;
+    onSelectDecision?: (decisionId: string) => void;
+    onRefresh?: () => void;
+    title?: string;
+}
+declare const ReviewQueue: React.FC<ReviewQueueProps>;
+
+interface RiskExplanationProps {
+    decisionId?: string;
+    decision?: ScoreResult;
+    loading?: boolean;
+    className?: string;
+    title?: string;
+}
+declare const RiskExplanation: React.FC<RiskExplanationProps>;
+
+interface AuditTimelineProps {
+    decisionId?: string;
+    audit?: DecisionAuditReconstruction;
+    loading?: boolean;
+    className?: string;
+    title?: string;
+}
+declare const AuditTimeline: React.FC<AuditTimelineProps>;
+
+interface WorkspaceItem {
+    id: string;
+    label: string;
+    icon?: React.ComponentType<{
+        size?: number;
+    }>;
+    component?: React.ComponentType<any>;
+}
+interface MerchantDashboardTemplateProps {
+    brandTitle?: string;
+    merchantName?: string;
+    workspaces?: string[] | WorkspaceItem[];
+    defaultWorkspace?: string;
+    layout?: 'tabs' | 'sidebar' | 'stacked';
+    theme?: 'dark' | 'light';
+    showBranding?: boolean;
+    columns?: ColDef<ScoreResult>[];
+    onReviewAction?: (id: string, action: 'APPROVE' | 'REJECT', notes?: string) => Promise<void> | void;
+    renderHeaderRight?: () => React.ReactNode;
+}
+declare const MerchantDashboardTemplate: React.FC<MerchantDashboardTemplateProps>;
+
+interface ReturnGuardDashboardProps {
+    initialTab?: string;
+    brandTitle?: string;
+}
+declare const ReturnGuardDashboard: React.FC<ReturnGuardDashboardProps>;
 
 interface DashboardShellProps {
     currentTab: string;
@@ -143,12 +269,6 @@ declare const PaymentPipelinePage: React.FC;
 declare const ReviewsPage: React.FC;
 
 declare const ReportsPage: React.FC;
-
-interface ReturnGuardDashboardProps {
-    initialTab?: string;
-    brandTitle?: string;
-}
-declare const ReturnGuardDashboard: React.FC<ReturnGuardDashboardProps>;
 
 interface ChartContainerProps {
     children?: React.ReactNode;
@@ -287,4 +407,4 @@ declare function calculatePercentage(value: number, total: number, decimals?: nu
  */
 declare function formatMetricValue(value: number | undefined | null, format?: 'count' | 'percent' | 'currency' | 'ratio', currencyCode?: string): string;
 
-export { CHART_COLORS, CHART_CSS_VARS, type ChartColorKey, ChartContainer, type ChartContainerProps, ChartEmptyState, type ChartEmptyStateProps, ChartErrorState, type ChartErrorStateProps, ChartLegend, type ChartLegendItem, type ChartLegendProps, ChartLoadingState, type ChartLoadingStateProps, ChartTooltip, type ChartTooltipPayloadItem, type ChartTooltipProps, CustomersPage, DashboardShell, DetailDrawer, InvestigationsPage, ModelsPage, OverviewPage, PaymentPipelinePage, ReportsPage, type ReturnGuardContextValue, ReturnGuardDashboard, ReturnGuardProvider, type ReturnGuardProviderProps, ReviewsPage, RiskAnalyticsPage, RiskBadge, RulesPage, TransactionsGrid, TransactionsPage, calculatePercentage, formatMetricValue, useCustomerProfile, useCustomers, useModelPerformance, useReturnGuard, useReviews, useRiskDecisions, useRiskSummary, useRiskTrends, useTransactionRisk };
+export { AuditTimeline, type AuditTimelineProps, CHART_COLORS, CHART_CSS_VARS, type ChartColorKey, ChartContainer, type ChartContainerProps, ChartEmptyState, type ChartEmptyStateProps, ChartErrorState, type ChartErrorStateProps, ChartLegend, type ChartLegendItem, type ChartLegendProps, ChartLoadingState, type ChartLoadingStateProps, ChartTooltip, type ChartTooltipPayloadItem, type ChartTooltipProps, CustomersPage, DashboardShell, DetailDrawer, InvestigationsPage, type MerchantDashboardConfig, MerchantDashboardTemplate, type MerchantDashboardTemplateProps, ModelsPage, OverviewPage, PaymentPipelinePage, ReportsPage, type ReturnGuardContextValue, ReturnGuardDashboard, type ReturnGuardDashboardProps, ReturnGuardProvider, type ReturnGuardProviderProps, type ReviewItem, ReviewQueue, type ReviewQueueProps, ReviewsPage, RiskAnalyticsPage, RiskBadge, type RiskBadgeProps, RiskDecisionGrid, type RiskDecisionGridProps, RiskExplanation, type RiskExplanationProps, RiskScoreBadge, type RiskScoreBadgeProps, RiskSummary, type RiskSummaryProps, RulesPage, TransactionsGrid, TransactionsPage, type WorkspaceItem, calculatePercentage, formatMetricValue, useCustomerProfile, useCustomers, useModelPerformance, useReturnGuard, useReviewQueue, useReviews, useRiskDecisions, useRiskSummary, useRiskTrends, useTransactionRisk };
