@@ -2,10 +2,13 @@ import React from 'react';
 
 export interface BadgeProps {
   score?: number;
+  tier?: string;
   severity?: string;
   action?: string;
   className?: string;
 }
+
+export type RiskBadgeProps = BadgeProps;
 
 /**
  * Compact, professional status badge for risk scores, policy actions, and severity levels.
