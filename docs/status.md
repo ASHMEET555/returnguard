@@ -50,3 +50,43 @@ Phase I (Evidence Engine) and Phase I-R (Reviewer Workflow & Dashboard) are full
 ## 3. UNVERIFIED External Dependencies
 - PayPal Disputes API v1 reason code enums (`MERCHANDISE_OR_SERVICE_NOT_RECEIVED`, `UNAUTHORISED`, `MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED`, `CANCELED_RECURRING_BILLING`) mapped and marked `UNVERIFIED` pending live sandbox payload verification in ShopPoint.
 - PayPal document submission type names (`PROOF_OF_DELIVERY`, `TRACKING_INFORMATION`, `SALES_RECEIPT`, `CUSTOMER_COMMUNICATION`, `RETURN_POLICY`, `TERMS_AND_CONDITIONS`) marked `UNVERIFIED` in `config/evidence_types.yaml`.
+
+
+---
+
+## 4. Landing & Key-Management Onboarding System (`landing/onboarding`)
+
+The Landing Page, Key-Management Settings page, and SDK Integration Guide have been implemented on branch `landing/onboarding`.
+
+### Commit Chain
+- `ff88d22`: `docs(landing): preflight` (Step 0)
+- `627de66`: `feat(api): bootstrap admin session with rate-limited login` (Step 1)
+- `6ff11cd`: `feat(api): admin API-key create, list, revoke and rotate` (Step 2)
+- `3fb1342`: `feat(web): landing route and navigation` (Step 3)
+- `a68adbd`: `feat(web): landing hero, architecture and how-it-works sections` (Step 4a)
+- `46ddda7`: `feat(web): landing features, dashboard preview and model metrics` (Step 4b)
+- `cbbfdc6`: `feat(web): landing security, FAQ and footer` (Step 4c)
+- `7f6d256`: `feat(web): settings page for merchant API keys` (Step 5)
+- `879aeab`: `feat(web): SDK download, checksum and integration guide` (Step 6)
+
+### Key Architectural Implementations
+1. **Admin Auth & Rate Limiting (`auth/admin.py`, `api/routes/admin.py`)**:
+   - `RG_ADMIN_TOKEN` constant-time verification (`hmac.compare_digest`).
+   - Rate limiting: sliding window (5 attempts/min per IP, 6th returns 429 Retry-After).
+   - Session store: 8-hour lifetime, HTTP-only, Secure (on HTTPS), SameSite=Strict cookie (`rg_admin_session`).
+   - Supports cookie, `X-Admin-Token`, and `Authorization: Bearer <token>`.
+2. **API Key Management Backend**:
+   - `POST /v1/admin/merchants/{id}/api-keys`: returns full plaintext key once with prefix `rg_live_`.
+   - `GET /v1/admin/merchants/{id}/api-keys`: lists keys with prefix (`rg_live_ab...`), label, created date, active status (never leaks full key or hash).
+   - `POST /v1/admin/api-keys/{id}/revoke`: idempotent revocation (subsequent scores return 401).
+   - `POST /v1/admin/api-keys/{id}/rotate`: atomic revocation of old key and generation of new key in a single DB transaction.
+3. **Web Routes**:
+   - `/`: Product landing page with responsive navigation, interactive architecture, features, verifiable model benchmarks with honest limits note, defense-in-depth, and FAQ.
+   - `/dashboard`: Operations console embed view moved from root.
+   - `/settings`: Administrator login, merchant selector, key generation with one-time reveal modal, rotate, and revoke dialogs. Zero tokens in browser storage.
+   - `/docs/integrate`: Developer SDK guide with tarball download, SHA-256 verification, Docker local run, server-side scoring, safe embed, Python client, and cURL snippets.
+4. **Standalone SDK Distribution (`scripts/pack_sdk.py`)**:
+   - Pre-packaged standalone `@returnguard/sdk` tarball at `web/public/downloads/returnguard-sdk.tgz`.
+   - Integrity SHA-256 checksum at `web/public/downloads/returnguard-sdk.tgz.sha256`.
+5. **Zero Secret Leakage Verification (`scripts/bundle_check.py`)**:
+   - Automated scanner verifying no live API keys or admin tokens are bundled in client assets.
