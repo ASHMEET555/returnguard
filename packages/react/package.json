@@ -4,19 +4,20 @@
   "private": true,
   "description": "React components and hooks for ReturnGuard payment fraud operations",
   "type": "module",
-  "main": "./dist/index.cjs",
+  "main": "./dist/index.cjs.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
+      "require": "./dist/index.cjs.js"
     },
-    "./styles.css": "./dist/styles.css"
+    "./styles.css": "./dist/styles.css",
+    "./dist/*": "./dist/*"
   },
   "scripts": {
-    "build": "tsup && node -e \"fs.copyFileSync('src/styles.css', 'dist/styles.css'); fs.copyFileSync('src/styles.css', 'styles.css')\"",
+    "build": "tsup && node build-css.cjs",
     "test": "vitest run",
     "lint": "oxlint"
   },

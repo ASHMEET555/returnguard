@@ -10,10 +10,7 @@ import {
   Tooltip,
 } from 'recharts';
 import { AgGridReact } from 'ag-grid-react';
-import { ModuleRegistry, AllCommunityModule } from 'ag-grid-community';
 import type { ColDef, RowClickedEvent } from 'ag-grid-community';
-import 'ag-grid-community/styles/ag-grid.css';
-import 'ag-grid-community/styles/ag-theme-alpine.css';
 
 import type { ReviewItem } from '@returnguard/sdk';
 import { useReviews, useRiskSummary } from '../hooks';
@@ -35,9 +32,6 @@ import {
   CHART_CSS_VARS,
   calculatePercentage,
 } from './charts';
-
-// Register standard community modules for AG Grid v36+
-ModuleRegistry.registerModules([AllCommunityModule]);
 
 export const ReviewsPage: React.FC = () => {
   const { client, theme } = useReturnGuard();

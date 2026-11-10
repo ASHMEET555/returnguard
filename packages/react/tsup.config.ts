@@ -8,4 +8,5 @@ export default defineConfig({
   sourcemap: true,
   clean: true,
   external: ['react', 'react-dom', 'ag-grid-community', 'ag-grid-react'],
+  noExternal: ['recharts'],
 });
