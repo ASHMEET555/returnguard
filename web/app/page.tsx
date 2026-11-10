@@ -5,6 +5,7 @@ import { Navbar } from "../components/Navbar";
 import { HeroAndOverview } from "../components/landing/HeroAndOverview";
 import { HowItWorks } from "../components/landing/HowItWorks";
 import { FeaturesAndMetrics } from "../components/landing/FeaturesAndMetrics";
+import { SecurityAndFaq } from "../components/landing/SecurityAndFaq";
 
 export default function LandingPage() {
   return (
@@ -14,6 +15,7 @@ export default function LandingPage() {
         <HeroAndOverview />
         <HowItWorks />
         <FeaturesAndMetrics />
+        <SecurityAndFaq />
       </main>
     </div>
   );
