@@ -4,6 +4,7 @@ import React from "react";
 import { Navbar } from "../components/Navbar";
 import { HeroAndOverview } from "../components/landing/HeroAndOverview";
 import { HowItWorks } from "../components/landing/HowItWorks";
+import { FeaturesAndMetrics } from "../components/landing/FeaturesAndMetrics";
 
 export default function LandingPage() {
   return (
@@ -12,6 +13,7 @@ export default function LandingPage() {
       <main style={{ flex: 1 }}>
         <HeroAndOverview />
         <HowItWorks />
+        <FeaturesAndMetrics />
       </main>
     </div>
   );
