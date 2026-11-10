@@ -52,7 +52,7 @@ export default function SettingsPage() {
   const [confirmRotateKeyId, setConfirmRotateKeyId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const baseUrl = process.env.NEXT_PUBLIC_RETURNGUARD_API_URL || "http://127.0.0.1:8000";
+  const baseUrl = process.env.NEXT_PUBLIC_RETURNGUARD_API_URL || "";
 
   // Check admin session on load
   const checkSession = useCallback(async () => {
@@ -85,14 +85,14 @@ export default function SettingsPage() {
       if (res.ok) {
         const data: Merchant[] = await res.json();
         setMerchants(data);
-        if (data.length > 0 && !selectedMerchantId) {
-          setSelectedMerchantId(data[0].id);
+        if (data.length > 0) {
+          setSelectedMerchantId((prev) => prev || data[0].id);
         }
       }
     } catch (err) {
       console.error("Failed to load merchants", err);
     }
-  }, [baseUrl, selectedMerchantId]);
+  }, [baseUrl]);
 
   useEffect(() => {
     if (isAdminAuthenticated) {
@@ -182,12 +182,13 @@ export default function SettingsPage() {
   // Create API Key
   const handleCreateKey = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newKeyName.trim() || !selectedMerchantId) return;
+    const targetMerchantId = selectedMerchantId || (merchants.length > 0 ? merchants[0].id : "");
+    if (!newKeyName.trim() || !targetMerchantId) return;
     setIsCreatingKey(true);
     setActionError(null);
 
     try {
-      const res = await fetch(`${baseUrl}/v1/admin/merchants/${selectedMerchantId}/api-keys`, {
+      const res = await fetch(`${baseUrl}/v1/admin/merchants/${targetMerchantId}/api-keys`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -204,7 +205,7 @@ export default function SettingsPage() {
         });
         setShowCreateModal(false);
         setNewKeyName("");
-        fetchKeys(selectedMerchantId);
+        fetchKeys(targetMerchantId);
       } else {
         const err = await res.json().catch(() => ({}));
         setActionError(err.detail || "Failed to create API key.");
