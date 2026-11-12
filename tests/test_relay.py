@@ -237,7 +237,7 @@ def test_4_same_event_id_under_different_merchants_no_collision(client, db_sessi
 
 
 # 5. Body merchant_id conflicting with key: 400
-def test_5_body_merchant_id_conflicting_with_key_returns_400(client, db_session):
+def test_5_body_merchant_id_conflicting_with_key_returns_403(client, db_session):
     mid_real = f"merch_real_{uuid.uuid4().hex[:8]}"
     key_real = create_merchant_and_key(db_session, mid_real)
 
@@ -252,7 +252,7 @@ def test_5_body_merchant_id_conflicting_with_key_returns_400(client, db_session)
         json=payload,
         headers={"Authorization": f"Bearer {key_real}"},
     )
-    assert resp.status_code == 400
+    assert resp.status_code == 403
     assert "does not match authenticated merchant" in resp.json()["detail"]
 
 

@@ -1,5 +1,7 @@
 import React from 'react';
 import type { ScoreResponse } from '../lib/types';
+import { RiskBadge } from './RiskBadge';
+import styles from './DetailDrawer.module.css';
 
 interface DetailDrawerProps {
   isOpen: boolean;
@@ -15,64 +17,88 @@ export const DetailDrawer: React.FC<DetailDrawerProps> = ({
   if (!isOpen || !data) return null;
 
   return (
-    <aside
-      className="detail-drawer"
-      style={{
-        position: 'fixed',
-        right: 0,
-        top: 0,
-        width: '420px',
-        height: '100%',
-        backgroundColor: '#fff',
-        boxShadow: '-2px 0 8px rgba(0,0,0,0.15)',
-        padding: '24px',
-        overflowY: 'auto',
-        zIndex: 1000,
-      }}
-    >
-      <button
-        type="button"
-        onClick={onClose}
-        style={{ float: 'right', cursor: 'pointer' }}
-      >
-        Close
-      </button>
-      <h3>Investigation Detail</h3>
-      <p>
-        <strong>Order ID:</strong> {data.order_id}
-      </p>
-      <p>
-        <strong>Channel:</strong> {data.channel}
-      </p>
-      <p>
-        <strong>Risk Score:</strong> {data.risk_score}
-      </p>
-      <p>
-        <strong>Severity:</strong> {data.severity}
-      </p>
-      <p>
-        <strong>Suggested Action:</strong> {data.suggested_action}
-      </p>
-      <p>
-        <strong>Ring ID:</strong> {data.ring_id ?? 'None'}
-      </p>
-      <div>
-        <strong>Reason Codes:</strong>
-        <ul>
-          {data.reason_codes.map((rc) => (
-            <li key={rc}>{rc}</li>
-          ))}
-        </ul>
-      </div>
-      <div>
-        <strong>Rule Hits:</strong>
-        <ul>
-          {data.rule_hits.map((rule) => (
-            <li key={rule}>{rule}</li>
-          ))}
-        </ul>
-      </div>
-    </aside>
+    <>
+      <div className={styles.backdrop} onClick={onClose} aria-hidden="true" />
+      <aside className={styles.drawer} role="dialog" aria-modal="true" aria-label="Investigation Detail">
+        <div className={styles.header}>
+          <h3 className={styles.title}>Investigation Detail</h3>
+          <button
+            type="button"
+            className={styles.closeButton}
+            onClick={onClose}
+            aria-label="Close drawer"
+          >
+            ✕ Close
+          </button>
+        </div>
+
+        <div className={styles.section}>
+          <div className={styles.grid}>
+            <div className={styles.field}>
+              <span className={styles.label}>Order ID</span>
+              <span className={styles.valueMono}>{data.order_id}</span>
+            </div>
+            <div className={styles.field}>
+              <span className={styles.label}>Channel</span>
+              <span className={styles.value}>{data.channel.toUpperCase()}</span>
+            </div>
+          </div>
+
+          <div className={styles.grid}>
+            <div className={styles.field}>
+              <span className={styles.label}>Severity & Score</span>
+              <div>
+                <RiskBadge severity={data.severity} score={data.risk_score} />
+              </div>
+            </div>
+            <div className={styles.field}>
+              <span className={styles.label}>Suggested Action</span>
+              <span className={styles.value}>{data.suggested_action}</span>
+            </div>
+          </div>
+
+          <div className={styles.field}>
+            <span className={styles.label}>Ring ID</span>
+            <span className={styles.valueMono}>{data.ring_id ?? 'None Detected'}</span>
+          </div>
+
+          <div className={styles.field}>
+            <span className={styles.label}>Model Version</span>
+            <span className={styles.valueMono}>{data.model_version}</span>
+          </div>
+
+          <div className={styles.listCard}>
+            <div className={styles.listTitle}>Reason Codes</div>
+            {data.reason_codes && data.reason_codes.length > 0 ? (
+              <ul className={styles.list}>
+                {data.reason_codes.map((rc) => (
+                  <li key={rc} className={styles.listItem}>
+                    {rc}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <span className={styles.label}>None recorded</span>
+            )}
+          </div>
+
+          <div className={styles.listCard}>
+            <div className={styles.listTitle}>Rule Hits</div>
+            {data.rule_hits && data.rule_hits.length > 0 ? (
+              <ul className={styles.list}>
+                {data.rule_hits.map((rule) => (
+                  <li key={rule} className={styles.listItem}>
+                    {rule}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <span className={styles.label}>No rule triggers</span>
+            )}
+          </div>
+        </div>
+      </aside>
+    </>
   );
 };
 

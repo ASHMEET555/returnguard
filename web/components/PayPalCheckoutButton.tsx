@@ -1,4 +1,5 @@
 import React from 'react';
+import styles from './PayPalCheckoutButton.module.css';
 
 /**
  * PayPalCheckoutButton component placeholder.
@@ -11,16 +12,11 @@ export const PayPalCheckoutButton: React.FC = () => {
     <button
       type="button"
       disabled
-      style={{
-        padding: '10px 20px',
-        backgroundColor: '#ffc439',
-        border: '1px solid #e0aa2b',
-        borderRadius: '4px',
-        cursor: 'not-allowed',
-        fontWeight: 'bold',
-      }}
+      className={styles.button}
+      aria-label="PayPal Checkout"
     >
-      PayPal Checkout (Phase D Scaffolding)
+      <span>PayPal Checkout</span>
+      <span className={styles.badgeTag}>Phase D</span>
     </button>
   );
 };

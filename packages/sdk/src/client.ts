@@ -4,6 +4,7 @@
 
 import { ClientOptions } from "./auth";
 import { Transport } from "./transport";
+import { validateScorePayloadMonetary } from "./validation";
 import {
   TransactionInvestigationResponse,
   AnalyticsSummary,
@@ -14,6 +15,7 @@ import {
   DecisionAuditReconstruction,
   DecisionListParams,
   DecisionListResponse,
+  EvidencePackData,
   InvestigationAssessment,
   InvestigationDetail,
   InvestigationListParams,
@@ -41,6 +43,7 @@ export class ReturnGuardClient {
    * POST /v1/score. NEVER retried automatically.
    */
   public async scoreTransaction(payload: ScorePayload): Promise<ScoreResult> {
+    validateScorePayloadMonetary(payload);
     return this.transport.request<ScoreResult>({
       method: "POST",
       path: "/v1/score",
@@ -311,6 +314,18 @@ export class ReturnGuardClient {
       return this.transport.request<InvestigationTimelineResponse>({
         method: "GET",
         path: `/v1/investigations/${encodeURIComponent(id)}/timeline`,
+      });
+    },
+
+    /**
+     * Retrieves canonical evidence package in JSON or Markdown format.
+     * GET /v1/investigations/{id}/pack. Retriable.
+     */
+    getPack: async (id: string, format: "json" | "md" = "json"): Promise<EvidencePackData | string> => {
+      return this.transport.request<EvidencePackData | string>({
+        method: "GET",
+        path: `/v1/investigations/${encodeURIComponent(id)}/pack`,
+        query: { format },
       });
     },
 

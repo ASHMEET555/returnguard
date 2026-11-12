@@ -115,6 +115,42 @@ class TenantScopedRepository:
             .first()
         )
 
+    def get_payment_by_capture(self, capture_id: str) -> Optional[Payment]:
+        """Fetch payment by capture_id strictly within this merchant's scope."""
+        return (
+            self.db.query(Payment)
+            .filter(
+                Payment.capture_id == capture_id,
+                Payment.merchant_id == self.merchant_id,
+            )
+            .first()
+        )
+
+    def get_payment_by_order(self, order_id: str) -> Optional[Payment]:
+        """Fetch payment by order_id strictly within this merchant's scope."""
+        return (
+            self.db.query(Payment)
+            .filter(
+                Payment.order_id == order_id,
+                Payment.merchant_id == self.merchant_id,
+            )
+            .order_by(Payment.created_at.desc())
+            .first()
+        )
+
+    def get_pending_refunds_for_order(self, order_id: str) -> List[Refund]:
+        """Fetch all pending unlinked refunds for an order strictly within tenant scope."""
+        return (
+            self.db.query(Refund)
+            .filter(
+                Refund.merchant_id == self.merchant_id,
+                Refund.order_id == order_id,
+                Refund.status == "PENDING_CAPTURE_LINK",
+            )
+            .order_by(Refund.created_at.asc())
+            .all()
+        )
+
     # --- Decision & Audit Records ---
 
     def get_decision(self, decision_id: str) -> Optional[AuditScoreEvent]:

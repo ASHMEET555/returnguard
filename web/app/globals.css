@@ -1,40 +1,119 @@
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Surfaces & Canvas (Dark by default for FinTech Risk Ops) */
+  --rg-bg-primary: #0b0f19;
+  --rg-bg-secondary: #111827;
+  --rg-bg-tertiary: #1f2937;
+  --rg-bg-card: #131c2e;
+  --rg-bg-hover: #192234;
+
+  /* Borders & Dividers */
+  --rg-border: #1f2d42;
+  --rg-border-primary: #1f2d42;
+  --rg-border-subtle: #162032;
+  --rg-border-active: #3b82f6;
+  --rg-shadow-card: 0 1px 3px 0 rgba(0, 0, 0, 0.35), 0 1px 2px 0 rgba(0, 0, 0, 0.2);
+  --rg-shadow-drawer: -4px 0 24px rgba(0, 0, 0, 0.5);
+
+  /* Typography */
+  --rg-text-primary: #f9fafb;
+  --rg-text-secondary: #9ca3af;
+  --rg-text-muted: #64748b;
+
+  /* Interactive / Accent */
+  --rg-accent: #3b82f6;
+  --rg-accent-hover: #2563eb;
+  --rg-accent-subtle: rgba(59, 130, 246, 0.12);
+
+  /* Risk & Status Badges */
+  --rg-low-bg: rgba(16, 185, 129, 0.12);
+  --rg-low-text: #10b981;
+  --rg-low-border: rgba(16, 185, 129, 0.25);
+
+  --rg-med-bg: rgba(245, 158, 11, 0.12);
+  --rg-med-text: #f59e0b;
+  --rg-med-border: rgba(245, 158, 11, 0.25);
+
+  --rg-high-bg: rgba(239, 68, 68, 0.12);
+  --rg-high-text: #f87171;
+  --rg-high-border: rgba(239, 68, 68, 0.25);
+
+  --rg-crit-bg: rgba(159, 18, 57, 0.22);
+  --rg-crit-text: #fb7185;
+  --rg-crit-border: rgba(225, 29, 72, 0.4);
+
+  /* Fonts & Radius */
+  --rg-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", Helvetica, Arial, sans-serif;
+  --rg-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --rg-radius-sm: 4px;
+  --rg-radius-md: 6px;
+  --rg-radius-lg: 8px;
+  --rg-focus-ring: 0 0 0 2px var(--rg-accent-subtle), 0 0 0 1px var(--rg-accent);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+[data-rg-theme="light"] {
+  /* Surfaces */
+  --rg-bg-primary: #f8f9fa;
+  --rg-bg-secondary: #ffffff;
+  --rg-bg-tertiary: #f1f5f9;
+  --rg-bg-card: #ffffff;
+  --rg-bg-hover: #f1f5f9;
+
+  /* Borders & Dividers */
+  --rg-border: #e2e8f0;
+  --rg-border-primary: #e2e8f0;
+  --rg-border-subtle: #edf2f7;
+  --rg-border-active: #2b2b52;
+  --rg-shadow-card: 0 1px 3px 0 rgba(0, 0, 0, 0.06), 0 1px 2px 0 rgba(0, 0, 0, 0.04);
+  --rg-shadow-drawer: -4px 0 24px rgba(0, 0, 0, 0.15);
+
+  /* Typography */
+  --rg-text-primary: #1a1f36;
+  --rg-text-secondary: #4f566b;
+  --rg-text-muted: #697386;
+
+  /* Interactive / Accent */
+  --rg-accent: #2b2b52;
+  --rg-accent-hover: #303f9f;
+  --rg-accent-subtle: rgba(43, 43, 82, 0.08);
+
+  /* Risk & Status Badges */
+  --rg-low-bg: #ecfdf5;
+  --rg-low-text: #047857;
+  --rg-low-border: #a7f3d0;
+
+  --rg-med-bg: #fffbeb;
+  --rg-med-text: #b45309;
+  --rg-med-border: #fde68a;
+
+  --rg-high-bg: #fef2f2;
+  --rg-high-text: #b91c1c;
+  --rg-high-border: #fecaca;
+
+  --rg-crit-bg: #fff1f2;
+  --rg-crit-text: #be123c;
+  --rg-crit-border: #fecdd3;
 }
 
-html {
-  height: 100%;
+/* Base Resets */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
-html,
-body {
+html, body {
   max-width: 100vw;
+  min-height: 100%;
   overflow-x: hidden;
 }
 
 body {
-  min-height: 100%;
-  display: flex;
-  flex-direction: column;
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--rg-font-sans);
+  background-color: var(--rg-bg-primary);
+  color: var(--rg-text-primary);
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-}
-
-* {
-  box-sizing: border-box;
-  padding: 0;
-  margin: 0;
 }
 
 a {
@@ -42,8 +121,31 @@ a {
   text-decoration: none;
 }
 
-@media (prefers-color-scheme: dark) {
-  html {
-    color-scheme: dark;
-  }
+button {
+  font-family: inherit;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--rg-bg-primary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--rg-border);
+  border-radius: var(--rg-radius-sm);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--rg-border-active);
+}
+
+/* Global focus accessibility */
+:focus-visible {
+  outline: none;
+  box-shadow: var(--rg-focus-ring);
 }

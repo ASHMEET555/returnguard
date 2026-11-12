@@ -5,7 +5,7 @@ import { ReturnGuardClient } from "../src/client";
 import { createRenewingTokenProvider } from "../src/auth";
 import { AuthenticationError, NotFoundError, RateLimitError } from "../src/errors";
 
-const TEST_PORT = 8765;
+const TEST_PORT = 8766;
 const BASE_URL = `http://127.0.0.1:${TEST_PORT}`;
 const SIGNING_KEY = "super_secure_embed_signing_key_at_least_32_bytes_long!";
 const TEST_API_KEY = "rg_live_contract_test_key_001";
@@ -13,6 +13,7 @@ const TEST_MERCHANT_ID = "merch_contract_e2e";
 const TEST_MERCHANT_B_ID = "merch_contract_tenant_b";
 const TEST_API_KEY_B = "rg_live_contract_test_key_b";
 const REPO_ROOT = path.resolve(__dirname, "../../..");
+const PYTHON_CMD = process.env.PYTHON || (process.platform === "win32" ? path.join(REPO_ROOT, ".venv/Scripts/python.exe") : "python");
 
 let serverProc: ChildProcess | null = null;
 
@@ -64,7 +65,7 @@ db.commit()
 db.close()
 `;
 
-    const p = spawn("python", ["-c", setupScript], { cwd: REPO_ROOT, stdio: "inherit" });
+    const p = spawn(PYTHON_CMD, ["-c", setupScript], { cwd: REPO_ROOT, stdio: "inherit" });
     await new Promise((resolve) => p.on("exit", resolve));
 
     // Start uvicorn server with cwd set to repo root
@@ -75,7 +76,7 @@ db.close()
     };
 
     serverProc = spawn(
-      "python",
+      PYTHON_CMD,
       ["-m", "uvicorn", "api.main:app", "--host", "127.0.0.1", "--port", String(TEST_PORT)],
       {
         cwd: REPO_ROOT,

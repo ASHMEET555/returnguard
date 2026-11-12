@@ -1,19 +1,52 @@
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef, useCallback, useMemo } from 'react';
 import { useTransactionRisk } from '../hooks';
 import { RiskBadge } from './RiskBadge';
 import { CloseIcon } from './icons';
+import {
+  formatCurrency,
+  addMonetaryAmounts,
+  multiplyMonetaryAmount,
+  parseMonetaryDecimal,
+  decimalToString,
+} from '../utils/currency';
+
+/**
+ * Line item representation for order context and risk evaluation.
+ *
+ * MONETARY INPUT CONTRACT:
+ * Decimal strings (e.g. "0.10", "99999999999999999.99") are canonical.
+ * Non-integer numbers (e.g. 0.1, 1.005) and unsafe integers (> MAX_SAFE_INTEGER) are rejected.
+ * Safe integer numbers (e.g. 100, 0) are accepted for backward compatibility.
+ */
+export interface PaymentLineItem {
+  id?: string;
+  name?: string;
+  description?: string;
+  quantity: number | string;
+  unit_price: number | string;
+  total_amount?: number | string;
+  sku?: string;
+  currency?: string;
+}
 
 export interface DetailDrawerProps {
   decisionId: string | null;
   onClose: () => void;
+  lineItems?: PaymentLineItem[];
+  currency?: string;
 }
 
 /**
- * Modernized accessible investigation sheet for transaction details and SHAP explanations.
- * Conforms to Stripe + Linear visual standards with strict keyboard focus trapping,
- * accessible ARIA dialog roles, focus restoration, and zero visual clutter.
+ * Modernized accessible investigation sheet for transaction details, payment line items,
+ * and SHAP explanations. Conforms to Stripe + Linear visual standards with strict keyboard
+ * focus trapping, accessible ARIA dialog roles, focus restoration, and dynamic currency presentation.
  */
-export const DetailDrawer: React.FC<DetailDrawerProps> = ({ decisionId, onClose }) => {
+export const DetailDrawer: React.FC<DetailDrawerProps> = ({
+  decisionId,
+  onClose,
+  lineItems: propLineItems,
+  currency: propCurrency,
+}) => {
   const { decision, audit, loading, error } = useTransactionRisk(decisionId);
 
   const drawerRef = useRef<HTMLElement>(null);
@@ -91,6 +124,82 @@ export const DetailDrawer: React.FC<DetailDrawerProps> = ({ decisionId, onClose 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [decisionId, handleClose]);
+
+  // Resolve transaction currency
+  const resolvedCurrency = useMemo(() => {
+    if (propCurrency) return propCurrency;
+    if (audit?.data?.order_summary?.currency) return audit.data.order_summary.currency;
+    if (decision?.currency) return decision.currency;
+    return null;
+  }, [propCurrency, audit, decision]);
+
+  // Resolve line items
+  const resolvedLineItems: PaymentLineItem[] = useMemo(() => {
+    if (propLineItems && propLineItems.length > 0) return propLineItems;
+    if (audit?.data?.line_items && audit.data.line_items.length > 0) {
+      return audit.data.line_items;
+    }
+    if (audit?.data?.order_summary?.items && audit.data.order_summary.items.length > 0) {
+      return audit.data.order_summary.items;
+    }
+    if (decision?.line_items && decision.line_items.length > 0) {
+      return decision.line_items;
+    }
+    if (decision?.order_summary?.items && decision.order_summary.items.length > 0) {
+      return decision.order_summary.items;
+    }
+    return [];
+  }, [propLineItems, audit, decision]);
+
+  // Check if items contain conflicting/mixed currencies
+  const hasMixedCurrencies = useMemo(() => {
+    if (resolvedLineItems.length <= 1) return false;
+    const currencies = new Set(
+      resolvedLineItems
+        .map((item) => (item.currency || resolvedCurrency || '').toUpperCase().trim())
+        .filter(Boolean)
+    );
+    return currencies.size > 1;
+  }, [resolvedLineItems, resolvedCurrency]);
+
+  // Compute line items totals exactly (never aggregate across differing currencies or invalid amounts)
+  const itemsTotalAmount = useMemo(() => {
+    if (resolvedLineItems.length === 0 || hasMixedCurrencies) return '0.00';
+    let total = '0.00';
+    for (const item of resolvedLineItems) {
+      const qty = item.quantity != null ? item.quantity : 1;
+      let lineTotal: string | null = null;
+      if (item.total_amount != null) {
+        if (parseMonetaryDecimal(item.total_amount) === null) {
+          return null; // Invalid monetary total
+        }
+        lineTotal = typeof item.total_amount === 'string'
+          ? item.total_amount
+          : decimalToString(parseMonetaryDecimal(item.total_amount)!);
+      } else if (item.unit_price != null) {
+        if (parseMonetaryDecimal(item.unit_price) === null) {
+          return null; // Invalid unit price
+        }
+        try {
+          lineTotal = multiplyMonetaryAmount(item.unit_price, qty);
+        } catch {
+          return null;
+        }
+      } else {
+        return null;
+      }
+      try {
+        total = addMonetaryAmounts(total, lineTotal);
+      } catch {
+        return null;
+      }
+    }
+    return total;
+  }, [resolvedLineItems, hasMixedCurrencies]);
+
+  const totalQuantity = useMemo(() => {
+    return resolvedLineItems.reduce((acc, item) => acc + (Number(item.quantity) || 0), 0);
+  }, [resolvedLineItems]);
 
   if (!decisionId) return null;
 
@@ -185,7 +294,100 @@ export const DetailDrawer: React.FC<DetailDrawerProps> = ({ decisionId, onClose 
                 )}
               </section>
 
-              {/* Section 3: Payment & Processor Context */}
+              {/* Section 3: Purchased Line Items */}
+              <section className="rg-drawer-section">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <div className="rg-drawer-section-title" style={{ margin: 0 }}>Purchased Line Items</div>
+                  {resolvedLineItems.length > 0 && (
+                    <span style={{ fontSize: 11, color: 'var(--rg-text-muted)' }}>
+                      {totalQuantity} {totalQuantity === 1 ? 'item' : 'items'}
+                    </span>
+                  )}
+                </div>
+
+                {resolvedLineItems.length > 0 ? (
+                  <div style={{ overflowX: 'auto', border: '1px solid var(--rg-border)', borderRadius: 6, background: 'var(--rg-bg-secondary)' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, textAlign: 'left' }}>
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid var(--rg-border)', background: 'var(--rg-bg-tertiary)', color: 'var(--rg-text-secondary)' }}>
+                          <th style={{ padding: '8px 10px', fontWeight: 600 }}>Item</th>
+                          <th style={{ padding: '8px 10px', fontWeight: 600 }}>SKU</th>
+                          <th style={{ padding: '8px 10px', fontWeight: 600, textAlign: 'right' }}>Qty</th>
+                          <th style={{ padding: '8px 10px', fontWeight: 600, textAlign: 'right' }}>Unit Price</th>
+                          <th style={{ padding: '8px 10px', fontWeight: 600, textAlign: 'right' }}>Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {resolvedLineItems.map((item, idx) => {
+                          const qty = item.quantity != null ? item.quantity : 1;
+                          const qtyDisplay = item.quantity != null ? String(item.quantity) : '1';
+                          let itemTotal: string | number | null = null;
+                          if (item.total_amount != null) {
+                            itemTotal = parseMonetaryDecimal(item.total_amount) !== null ? item.total_amount : null;
+                          } else if (item.unit_price != null && parseMonetaryDecimal(item.unit_price) !== null) {
+                            try {
+                              itemTotal = multiplyMonetaryAmount(item.unit_price, qty);
+                            } catch {
+                              itemTotal = null;
+                            }
+                          }
+                          const itemCurrency = item.currency || resolvedCurrency;
+
+                          return (
+                            <tr
+                              key={item.id || item.sku || idx}
+                              style={{ borderBottom: idx < resolvedLineItems.length - 1 ? '1px solid var(--rg-border-subtle, rgba(0,0,0,0.06))' : 'none' }}
+                            >
+                              <td style={{ padding: '8px 10px' }}>
+                                <div style={{ fontWeight: 600, color: 'var(--rg-text)' }}>
+                                  {item.name || item.description || `Item #${idx + 1}`}
+                                </div>
+                                {item.description && item.name && (
+                                  <div style={{ fontSize: 11, color: 'var(--rg-text-muted)' }}>{item.description}</div>
+                                )}
+                              </td>
+                              <td style={{ padding: '8px 10px', fontFamily: 'monospace', fontSize: 11, color: 'var(--rg-text-secondary)' }}>
+                                {item.sku ? item.sku : '--'}
+                              </td>
+                              <td style={{ padding: '8px 10px', textAlign: 'right', color: 'var(--rg-text)' }}>
+                                {qtyDisplay}
+                              </td>
+                              <td style={{ padding: '8px 10px', textAlign: 'right', color: 'var(--rg-text)' }}>
+                                {formatCurrency(item.unit_price, itemCurrency)}
+                              </td>
+                              <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 600, color: 'var(--rg-text)' }}>
+                                {itemTotal != null ? formatCurrency(itemTotal, itemCurrency) : '--'}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                      <tfoot>
+                        <tr style={{ borderTop: '2px solid var(--rg-border)', background: 'var(--rg-bg-tertiary)' }}>
+                          <td colSpan={2} style={{ padding: '8px 10px', fontWeight: 700, color: 'var(--rg-text)' }}>
+                            Total Items ({totalQuantity})
+                          </td>
+                          <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 700, color: 'var(--rg-text)' }}>
+                            {totalQuantity}
+                          </td>
+                          <td style={{ padding: '8px 10px', textAlign: 'right', color: 'var(--rg-text-muted)' }}>
+                            --
+                          </td>
+                          <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 700, color: 'var(--rg-text)' }}>
+                            {hasMixedCurrencies ? '-- (Mixed Currencies)' : (itemsTotalAmount != null ? formatCurrency(itemsTotalAmount, resolvedCurrency) : '--')}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="rg-drawer-empty-text">
+                    No line items recorded for this order projection.
+                  </div>
+                )}
+              </section>
+
+              {/* Section 4: Payment & Processor Context */}
               <section className="rg-drawer-section">
                 <div className="rg-drawer-section-title">Payment & Processor Context</div>
                 <div className="rg-context-grid">
@@ -198,6 +400,10 @@ export const DetailDrawer: React.FC<DetailDrawerProps> = ({ decisionId, onClose 
                     <span className="rg-context-value">{decision.channel || 'web'}</span>
                   </div>
                   <div className="rg-context-item">
+                    <span className="rg-context-label">Currency</span>
+                    <span className="rg-context-value">{resolvedCurrency || 'Not Specified'}</span>
+                  </div>
+                  <div className="rg-context-item">
                     <span className="rg-context-label">ReturnGuard Mode</span>
                     <span className="rg-context-value">
                       {decision.shadow ? 'Shadow (Non-blocking)' : 'Live Policy Enforcement'}
@@ -206,13 +412,13 @@ export const DetailDrawer: React.FC<DetailDrawerProps> = ({ decisionId, onClose 
                   <div className="rg-context-item">
                     <span className="rg-context-label">Payment Processor Status</span>
                     <span className="rg-context-value rg-text-muted rg-italic">
-                      Not Verified (Owned by Merchant / ShopPoint)
+                      Not Verified (Owned by Merchant Application)
                     </span>
                   </div>
                 </div>
               </section>
 
-              {/* Section 4: Audit Event Timeline & Signals */}
+              {/* Section 5: Audit Event Timeline & Signals */}
               <section className="rg-drawer-section">
                 <div className="rg-drawer-section-title">Audit Trail & Signals</div>
                 <div className="rg-audit-container">

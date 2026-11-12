@@ -9,7 +9,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from auth.embed_tokens import AuthContext, require_read_or_review_auth
-from db.models import AuditScoreEvent, Dispute, Order
+from db.models import AuditScoreEvent, Dispute, Order, Payment
 from db.session import get_db
 
 router = APIRouter(tags=["analytics"])
@@ -25,6 +25,10 @@ class AnalyticsSummaryResponse(BaseModel):
     total_volume_inr: float
     high_risk_volume_inr: float
     tier_distribution: Dict[str, int]
+    gross_captured_value: float = 0.0
+    refunded_value: float = 0.0
+    net_captured_value: float = 0.0
+    captured_volume_by_currency: Dict[str, Dict[str, float]] = {}
 
 
 class DailyTrendItem(BaseModel):
@@ -96,11 +100,40 @@ def get_analytics_summary(
         t = e.tier or "UNKNOWN"
         tier_distribution[t] = tier_distribution.get(t, 0) + 1
 
+    # Confirmed captured payments scoped strictly to tenant
+    payments = (
+        db.query(Payment)
+        .filter(Payment.merchant_id == tenant_id, Payment.status == "captured")
+        .all()
+    )
+
+    gross_captured_val = 0.0
+    refunded_val = 0.0
+    by_currency: Dict[str, Dict[str, float]] = {}
+
+    for p in payments:
+        curr = p.currency or "USD"
+        p_amount = float(p.amount)
+        p_refund = float(p.refunded_amount or 0.0)
+
+        gross_captured_val += p_amount
+        refunded_val += p_refund
+
+        if curr not in by_currency:
+            by_currency[curr] = {"gross_captured": 0.0, "refunded": 0.0, "net_captured": 0.0}
+        by_currency[curr]["gross_captured"] += p_amount
+        by_currency[curr]["refunded"] += p_refund
+        by_currency[curr]["net_captured"] += (p_amount - p_refund)
+
+    net_captured_val = gross_captured_val - refunded_val
+
+    # Fallback to legacy orders table sum if no captured payments exist yet
     total_vol = (
         db.query(func.coalesce(func.sum(Order.order_value), 0.0))
         .filter(Order.merchant_id == tenant_id)
         .scalar()
     )
+    volume_to_report = net_captured_val if payments else float(total_vol or 0.0)
 
     return AnalyticsSummaryResponse(
         tenant_id=tenant_id,
@@ -109,9 +142,13 @@ def get_analytics_summary(
         review_count=review_count,
         block_count=block_count,
         average_risk_score=round(avg_score, 4),
-        total_volume_inr=float(total_vol or 0.0),
+        total_volume_inr=volume_to_report,
         high_risk_volume_inr=0.0,
         tier_distribution=tier_distribution,
+        gross_captured_value=gross_captured_val,
+        refunded_value=refunded_val,
+        net_captured_value=net_captured_val,
+        captured_volume_by_currency=by_currency,
     )
 
 

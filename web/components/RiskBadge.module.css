@@ -1,0 +1,97 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: var(--rg-radius-sm);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-family: var(--rg-font-sans);
+  border: 1px solid transparent;
+  transition: all 0.15s ease-in-out;
+  white-space: nowrap;
+}
+
+.score {
+  font-family: var(--rg-font-mono);
+  font-weight: 600;
+  opacity: 0.9;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+/* None / Low Severity */
+.badge[data-severity="none"],
+.badge[data-severity="low"] {
+  background-color: var(--rg-low-bg);
+  color: var(--rg-low-text);
+  border-color: var(--rg-low-border);
+}
+
+.badge[data-severity="none"] .dot,
+.badge[data-severity="low"] .dot {
+  background-color: var(--rg-low-text);
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.4);
+}
+
+/* Info / Medium Severity */
+.badge[data-severity="info"],
+.badge[data-severity="medium"],
+.badge[data-severity="warning"] {
+  background-color: var(--rg-med-bg);
+  color: var(--rg-med-text);
+  border-color: var(--rg-med-border);
+}
+
+.badge[data-severity="info"] .dot,
+.badge[data-severity="medium"] .dot,
+.badge[data-severity="warning"] .dot {
+  background-color: var(--rg-med-text);
+  box-shadow: 0 0 6px rgba(245, 158, 11, 0.4);
+}
+
+/* Critical / High Severity */
+.badge[data-severity="high"] {
+  background-color: var(--rg-high-bg);
+  color: var(--rg-high-text);
+  border-color: var(--rg-high-border);
+}
+
+.badge[data-severity="high"] .dot {
+  background-color: var(--rg-high-text);
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.4);
+}
+
+.badge[data-severity="critical"] {
+  background-color: var(--rg-crit-bg);
+  color: var(--rg-crit-text);
+  border-color: var(--rg-crit-border);
+}
+
+.badge[data-severity="critical"] .dot {
+  background-color: var(--rg-crit-text);
+  box-shadow: 0 0 8px rgba(225, 29, 72, 0.6);
+  animation: pulse 1.8s infinite ease-in-out;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(0.95);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.95);
+    opacity: 0.8;
+  }
+}

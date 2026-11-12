@@ -1,6 +1,6 @@
 import React from 'react';
 import * as _returnguard_sdk from '@returnguard/sdk';
-import { ReturnGuardClient, ClientOptions, CustomerProfileResponse, ModelPerformance, ReviewsListResponse, ScoreResult, AnalyticsSummary, RiskTrendsResponse, DecisionAuditReconstruction, InvestigationDetail, InvestigationAssessment, InvestigationTimelineStep, InvestigationListItem } from '@returnguard/sdk';
+import { ReturnGuardClient, ClientOptions, CustomerProfileResponse, ModelPerformance, ReviewsListResponse, ScoreResult, AnalyticsSummary, RiskTrendsResponse, DecisionAuditReconstruction, InvestigationDetail, InvestigationAssessment, InvestigationTimelineStep, InvestigationListItem, EvidencePackData } from '@returnguard/sdk';
 import { ColDef } from 'ag-grid-community';
 
 interface MerchantDashboardConfig {
@@ -27,6 +27,8 @@ interface ReturnGuardProviderProps {
     clientOptions?: ClientOptions;
     configuration?: MerchantDashboardConfig;
     defaultTheme?: 'dark' | 'light';
+    theme?: 'dark' | 'light';
+    onThemeChange?: (theme: 'dark' | 'light') => void;
     defaultCurrency?: string;
     children: React.ReactNode;
 }
@@ -231,6 +233,7 @@ interface InvestigationsPageProps {
     testAssessment?: InvestigationAssessment | null;
     testTimeline?: InvestigationTimelineStep[] | null;
     testItems?: InvestigationListItem[] | null;
+    testPack?: EvidencePackData | any | null;
     onActionTrigger?: (action: string, payload?: any) => void;
 }
 declare const InvestigationsPage: React.FC<InvestigationsPageProps>;
@@ -245,14 +248,34 @@ declare const TransactionsGrid: React.FC<TransactionsGridProps>;
 
 declare const TransactionsPage: React.FC;
 
+/**
+ * Line item representation for order context and risk evaluation.
+ *
+ * MONETARY INPUT CONTRACT:
+ * Decimal strings (e.g. "0.10", "99999999999999999.99") are canonical.
+ * Non-integer numbers (e.g. 0.1, 1.005) and unsafe integers (> MAX_SAFE_INTEGER) are rejected.
+ * Safe integer numbers (e.g. 100, 0) are accepted for backward compatibility.
+ */
+interface PaymentLineItem {
+    id?: string;
+    name?: string;
+    description?: string;
+    quantity: number | string;
+    unit_price: number | string;
+    total_amount?: number | string;
+    sku?: string;
+    currency?: string;
+}
 interface DetailDrawerProps {
     decisionId: string | null;
     onClose: () => void;
+    lineItems?: PaymentLineItem[];
+    currency?: string;
 }
 /**
- * Modernized accessible investigation sheet for transaction details and SHAP explanations.
- * Conforms to Stripe + Linear visual standards with strict keyboard focus trapping,
- * accessible ARIA dialog roles, focus restoration, and zero visual clutter.
+ * Modernized accessible investigation sheet for transaction details, payment line items,
+ * and SHAP explanations. Conforms to Stripe + Linear visual standards with strict keyboard
+ * focus trapping, accessible ARIA dialog roles, focus restoration, and dynamic currency presentation.
  */
 declare const DetailDrawer: React.FC<DetailDrawerProps>;
 
@@ -407,4 +430,95 @@ declare function calculatePercentage(value: number, total: number, decimals?: nu
  */
 declare function formatMetricValue(value: number | undefined | null, format?: 'count' | 'percent' | 'currency' | 'ratio', currencyCode?: string): string;
 
-export { AuditTimeline, type AuditTimelineProps, CHART_COLORS, CHART_CSS_VARS, type ChartColorKey, ChartContainer, type ChartContainerProps, ChartEmptyState, type ChartEmptyStateProps, ChartErrorState, type ChartErrorStateProps, ChartLegend, type ChartLegendItem, type ChartLegendProps, ChartLoadingState, type ChartLoadingStateProps, ChartTooltip, type ChartTooltipPayloadItem, type ChartTooltipProps, CustomersPage, DashboardShell, DetailDrawer, InvestigationsPage, type MerchantDashboardConfig, MerchantDashboardTemplate, type MerchantDashboardTemplateProps, ModelsPage, OverviewPage, PaymentPipelinePage, ReportsPage, type ReturnGuardContextValue, ReturnGuardDashboard, type ReturnGuardDashboardProps, ReturnGuardProvider, type ReturnGuardProviderProps, type ReviewItem, ReviewQueue, type ReviewQueueProps, ReviewsPage, RiskAnalyticsPage, RiskBadge, type RiskBadgeProps, RiskDecisionGrid, type RiskDecisionGridProps, RiskExplanation, type RiskExplanationProps, RiskScoreBadge, type RiskScoreBadgeProps, RiskSummary, type RiskSummaryProps, RulesPage, TransactionsGrid, TransactionsPage, type WorkspaceItem, calculatePercentage, formatMetricValue, useCustomerProfile, useCustomers, useModelPerformance, useReturnGuard, useReviewQueue, useReviews, useRiskDecisions, useRiskSummary, useRiskTrends, useTransactionRisk };
+/**
+ * Centralized dynamic currency formatting and exact monetary arithmetic for ReturnGuard.
+ * Supports exact decimal presentation for: USD, INR, EUR, GBP, CAD, AUD.
+ *
+ * Invariants:
+ * 1. Never convert arbitrary-length decimal strings into JavaScript Number for formatting or arithmetic.
+ * 2. Preserve the integer portion and exact significant digits without IEEE-754 precision distortion.
+ * 3. Never assume USD or any other default currency when unspecified.
+ * 4. Never infer currency from browser/machine locale.
+ * 5. Never silently convert between currencies.
+ * 6. Never perform floating-point aggregations across differing currencies.
+ * 7. Apply an explicit Half-Up rounding policy for display formatting while keeping intermediate calculations exact.
+ */
+declare const SUPPORTED_CURRENCIES: readonly ["USD", "INR", "EUR", "GBP", "CAD", "AUD"];
+type SupportedCurrency = (typeof SUPPORTED_CURRENCIES)[number];
+interface FormatCurrencyOptions {
+    /**
+     * If true, always appends the ISO currency code (e.g. "$120.00 USD").
+     */
+    showCode?: boolean;
+    /**
+     * Target fraction digits (defaults to 2 for standard monetary display).
+     */
+    fractionDigits?: number;
+}
+/**
+ * Validates if a currency code is one of the 6 supported currencies.
+ */
+declare function isSupportedCurrency(currency: unknown): currency is SupportedCurrency;
+/**
+ * Returns the recognized symbol or prefix for a currency code.
+ * Returns null if the currency is not supported or not specified.
+ */
+declare function getCurrencySymbol(currency: string | null | undefined): string | null;
+interface ExactDecimal {
+    /** Signed unscaled integer representing all digits */
+    digits: bigint;
+    /** Number of fractional decimal places */
+    scale: number;
+}
+/**
+ * Strictly parses an arbitrary string, number, or bigint into an ExactDecimal.
+ *
+ * Invariants & Contract:
+ * 1. Monetary decimal strings (e.g. "0.10", "1234.56") are the canonical representation.
+ * 2. Non-integer JavaScript Numbers (e.g. 0.1, 0.1 + 0.2, 1.005) are REJECTED (returns null)
+ *    to prevent IEEE-754 floating-point inaccuracies from silently corrupting exact arithmetic.
+ * 3. Unsafe integer Numbers (e.g. 9007199254740992, NaN, Infinity) are REJECTED (returns null).
+ * 4. Validated safe integer Numbers (e.g. 100, 0) are accepted temporarily for backward compatibility.
+ * 5. Quantity may accept validated safe integer Numbers or decimal strings.
+ * 6. Rejected values are NEVER converted into strings to claim precision was preserved.
+ */
+declare function parseMonetaryDecimal(value: string | number | bigint | null | undefined): ExactDecimal | null;
+/**
+ * Converts an ExactDecimal to a canonical decimal string without scientific notation.
+ */
+declare function decimalToString(decimal: ExactDecimal): string;
+/**
+ * Exact monetary addition: A + B without floating-point error.
+ * Preserves exact scale: max(scaleA, scaleB).
+ */
+declare function addMonetaryAmounts(a: string | number | bigint, b: string | number | bigint): string;
+/**
+ * Exact monetary multiplication: Amount * Quantity without floating-point error.
+ * Scale is exact sum of scaleAmount + scaleQuantity.
+ */
+declare function multiplyMonetaryAmount(amount: string | number | bigint, quantity: string | number | bigint): string;
+/**
+ * Exact monetary summation of an array of amounts.
+ */
+declare function sumMonetaryAmounts(amounts: (string | number | bigint)[]): string;
+/**
+ * Compares two monetary amounts: returns -1 if a < b, 0 if a == b, 1 if a > b.
+ */
+declare function compareMonetaryAmounts(a: string | number | bigint, b: string | number | bigint): number;
+/**
+ * Formats a monetary amount and explicit currency code without floating-point distortion.
+ *
+ * Guarantees:
+ * 1. Decimal strings are parsed with arbitrary precision BigInt; never converted to IEEE-754 Number.
+ * 2. Integer digits are preserved completely (no precision cap at Number.MAX_SAFE_INTEGER).
+ * 3. Applies an explicit Half-Up rounding policy to the configured target fractionDigits (default 2).
+ * 4. Never defaults to USD or infers currency from browser locale.
+ * 5. Rejects malformed numeric strings safely with '--'.
+ *
+ * @param amount - Exact decimal string, number, or bigint
+ * @param currency - Explicit ISO currency code
+ * @param options - Formatting configuration (showCode, fractionDigits)
+ */
+declare function formatCurrency(amount: number | string | bigint | null | undefined, currency: string | null | undefined, options?: FormatCurrencyOptions): string;
+
+export { AuditTimeline, type AuditTimelineProps, CHART_COLORS, CHART_CSS_VARS, type ChartColorKey, ChartContainer, type ChartContainerProps, ChartEmptyState, type ChartEmptyStateProps, ChartErrorState, type ChartErrorStateProps, ChartLegend, type ChartLegendItem, type ChartLegendProps, ChartLoadingState, type ChartLoadingStateProps, ChartTooltip, type ChartTooltipPayloadItem, type ChartTooltipProps, CustomersPage, DashboardShell, DetailDrawer, type DetailDrawerProps, type ExactDecimal, type FormatCurrencyOptions, InvestigationsPage, type MerchantDashboardConfig, MerchantDashboardTemplate, type MerchantDashboardTemplateProps, ModelsPage, OverviewPage, type PaymentLineItem, PaymentPipelinePage, ReportsPage, type ReturnGuardContextValue, ReturnGuardDashboard, type ReturnGuardDashboardProps, ReturnGuardProvider, type ReturnGuardProviderProps, type ReviewItem, ReviewQueue, type ReviewQueueProps, ReviewsPage, RiskAnalyticsPage, RiskBadge, type RiskBadgeProps, RiskDecisionGrid, type RiskDecisionGridProps, RiskExplanation, type RiskExplanationProps, RiskScoreBadge, type RiskScoreBadgeProps, RiskSummary, type RiskSummaryProps, RulesPage, SUPPORTED_CURRENCIES, type SupportedCurrency, TransactionsGrid, TransactionsPage, type WorkspaceItem, addMonetaryAmounts, calculatePercentage, compareMonetaryAmounts, decimalToString, formatCurrency, formatMetricValue, getCurrencySymbol, isSupportedCurrency, multiplyMonetaryAmount, parseMonetaryDecimal, sumMonetaryAmounts, useCustomerProfile, useCustomers, useModelPerformance, useReturnGuard, useReviewQueue, useReviews, useRiskDecisions, useRiskSummary, useRiskTrends, useTransactionRisk };

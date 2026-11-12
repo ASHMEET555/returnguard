@@ -860,7 +860,7 @@ export const ReportsPage: React.FC = () => {
             <tr>
               <td className="rg-reports-stat-label">Tenant Scope</td>
               <td className="rg-reports-stat-value" style={{ fontFamily: 'var(--rg-font-mono)' }}>
-                {summary?.tenant_id || 'merch_shoppoint'}
+                {summary?.tenant_id || '--'}
               </td>
             </tr>
             <tr>

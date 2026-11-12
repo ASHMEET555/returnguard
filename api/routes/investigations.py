@@ -483,10 +483,11 @@ def get_investigation_detail(
 def get_investigation_pack(
     id: str,
     format: str = Query("json", pattern="^(json|md)$"),
+    download: bool = Query(False),
     auth: AuthContext = Depends(require_read_or_review_auth),
     db: Session = Depends(get_db),
 ):
-    """Return raw evidence pack in canonical json or markdown format."""
+    """Return raw evidence pack in canonical json or markdown format, with optional attachment download."""
     repo = TenantScopedRepository(db, auth.tenant_id)
     inv = repo.get_investigation(id)
     if not inv:
@@ -504,6 +505,26 @@ def get_investigation_pack(
     if not latest_pack:
         raise HTTPException(status_code=404, detail="Evidence pack not yet generated")
 
+    ext = "md" if format == "md" else "json"
+    filename = f"evidence_pack_{id}_v{latest_pack.version}.{ext}"
+
+    if download:
+        from fastapi.responses import Response
+
+        if format == "md":
+            return Response(
+                content=latest_pack.pack_md,
+                media_type="text/markdown",
+                headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+            )
+        import json
+
+        return Response(
+            content=json.dumps(latest_pack.pack_json, indent=2),
+            media_type="application/json",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
     if format == "md":
         from fastapi.responses import PlainTextResponse
 
@@ -512,6 +533,18 @@ def get_investigation_pack(
         )
 
     return latest_pack.pack_json
+
+
+@router.get("/{id}/evidence-pack/download", status_code=status.HTTP_200_OK)
+def download_investigation_pack(
+    id: str,
+    format: str = Query("json", pattern="^(json|md)$"),
+    auth: AuthContext = Depends(require_read_or_review_auth),
+    db: Session = Depends(get_db),
+):
+    """Download canonical evidence package with tenant isolation enforced."""
+    return get_investigation_pack(id=id, format=format, download=True, auth=auth, db=db)
+
 
 
 @router.post("/{id}/transition", status_code=status.HTTP_200_OK)

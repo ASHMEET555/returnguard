@@ -1,5 +1,7 @@
 import React from 'react';
 import { useRiskSummary } from '../hooks';
+import { useReturnGuard } from '../context';
+import { formatCurrency } from '../utils/currency';
 import type { AnalyticsSummary } from '@returnguard/sdk';
 import { ShieldIcon, AlertTriangleIcon, TransactionsIcon, AnalyticsIcon, RefreshIcon } from './icons';
 
@@ -22,6 +24,7 @@ export const RiskSummary: React.FC<RiskSummaryProps> = ({
   subtitle = 'Real-time payment authorization & risk metrics for merchant',
   className = '',
 }) => {
+  const { currency } = useReturnGuard();
   const hookSummary = useRiskSummary();
   const summary = propData ?? hookSummary.data;
   const loading = propLoading ?? (propData ? false : hookSummary.loading);
@@ -162,7 +165,7 @@ export const RiskSummary: React.FC<RiskSummaryProps> = ({
               <TransactionsIcon size={16} />
             </div>
             <div className="rg-stat-value" style={{ fontSize: 24, marginTop: 8 }}>
-              {loading ? '--' : `₹${totalVolume.toLocaleString()}`}
+              {loading ? '--' : formatCurrency(totalVolume, currency)}
             </div>
             <div style={{ fontSize: 11, color: 'var(--rg-text-muted)', marginTop: 4 }}>
               Authorized volume

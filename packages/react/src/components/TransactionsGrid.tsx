@@ -85,7 +85,7 @@ export const TransactionsGrid: React.FC<TransactionsGridProps> = ({
         valueGetter: () => 'Not Integrated (Provider Owned)',
         cellRenderer: () => (
           <span style={{ fontSize: 12, color: 'var(--rg-text-muted)', fontStyle: 'italic' }}>
-            Provider Owned (ShopPoint)
+            Provider Owned (Merchant Gateway)
           </span>
         ),
       },

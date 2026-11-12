@@ -65,7 +65,7 @@ const DEFAULT_WORKSPACE_DEFS: Record<string, WorkspaceItem> = {
 
 export const MerchantDashboardTemplate: React.FC<MerchantDashboardTemplateProps> = ({
   brandTitle = 'ReturnGuard',
-  merchantName = 'ShopPoint',
+  merchantName = 'Merchant Console',
   workspaces: propWorkspaces,
   defaultWorkspace = 'overview',
   layout = 'tabs',
@@ -107,16 +107,16 @@ export const MerchantDashboardTemplate: React.FC<MerchantDashboardTemplateProps>
   };
 
   return (
-    <div className={`rg-root rg-theme-${theme} rg-merchant-template`} style={{ minHeight: '100%', display: 'flex', flexDirection: 'column' }}>
+    <div className={`rg-root rg-theme-${theme} rg-merchant-template`} style={{ minHeight: '100%', display: 'flex', flexDirection: 'column', background: 'var(--rg-bg-primary)' }}>
       {/* Template Header */}
       <header
         style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          padding: '12px 20px',
-          background: 'var(--rg-bg-secondary, #1e293b)',
-          borderBottom: '1px solid var(--rg-border-primary, #334155)',
+          padding: '14px 24px',
+          background: 'var(--rg-bg-secondary)',
+          borderBottom: '1px solid var(--rg-border)',
           flexWrap: 'wrap',
           gap: 12,
         }}
@@ -127,11 +127,12 @@ export const MerchantDashboardTemplate: React.FC<MerchantDashboardTemplateProps>
               width: 32,
               height: 32,
               borderRadius: 8,
-              background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
+              background: 'linear-gradient(135deg, #2b2b52, #3b82f6)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               color: '#ffffff',
+              boxShadow: '0 2px 4px rgba(43, 43, 82, 0.25)',
             }}
           >
             <ShieldIcon size={18} />
@@ -158,13 +159,15 @@ export const MerchantDashboardTemplate: React.FC<MerchantDashboardTemplateProps>
               display: 'flex',
               alignItems: 'center',
               gap: 6,
-              padding: '5px 10px',
+              padding: '6px 12px',
               fontSize: 12,
+              fontWeight: 500,
               borderRadius: 6,
               background: 'var(--rg-bg-tertiary)',
-              border: '1px solid var(--rg-border-primary)',
-              color: 'var(--rg-text-secondary)',
+              border: '1px solid var(--rg-border)',
+              color: 'var(--rg-text-primary)',
               cursor: 'pointer',
+              transition: 'all 0.15s ease',
             }}
           >
             {theme === 'dark' ? (
@@ -188,10 +191,10 @@ export const MerchantDashboardTemplate: React.FC<MerchantDashboardTemplateProps>
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: 4,
-            padding: '8px 20px',
-            background: 'var(--rg-bg-primary, #0f172a)',
-            borderBottom: '1px solid var(--rg-border-primary, #334155)',
+            gap: 6,
+            padding: '8px 24px',
+            background: 'var(--rg-bg-tertiary)',
+            borderBottom: '1px solid var(--rg-border)',
             overflowX: 'auto',
           }}
         >
@@ -210,16 +213,16 @@ export const MerchantDashboardTemplate: React.FC<MerchantDashboardTemplateProps>
                   display: 'flex',
                   alignItems: 'center',
                   gap: 8,
-                  padding: '6px 14px',
+                  padding: '7px 16px',
                   borderRadius: 6,
-                  border: 'none',
-                  background: isActive ? 'var(--rg-bg-secondary, #1e293b)' : 'transparent',
-                  color: isActive ? 'var(--rg-text-primary, #ffffff)' : 'var(--rg-text-secondary, #94a3b8)',
+                  border: isActive ? '1px solid var(--rg-border)' : '1px solid transparent',
+                  background: isActive ? 'var(--rg-bg-secondary)' : 'transparent',
+                  color: isActive ? 'var(--rg-accent)' : 'var(--rg-text-secondary)',
                   fontWeight: isActive ? 600 : 500,
                   fontSize: 13,
                   cursor: 'pointer',
                   transition: 'all 0.15s ease',
-                  borderBottom: isActive ? '2px solid #3b82f6' : '2px solid transparent',
+                  boxShadow: isActive ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
                 }}
               >
                 {Icon && <Icon size={15} />}

@@ -44,6 +44,7 @@ export { InvestigationsPage } from './components/InvestigationsPage';
 export { TransactionsGrid } from './components/TransactionsGrid';
 export { TransactionsPage } from './components/TransactionsPage';
 export { DetailDrawer } from './components/DetailDrawer';
+export type { DetailDrawerProps, PaymentLineItem } from './components/DetailDrawer';
 export { CustomersPage } from './components/CustomersPage';
 export { RiskAnalyticsPage } from './components/RiskAnalyticsPage';
 export { RulesPage } from './components/RulesPage';
@@ -76,3 +77,19 @@ export type {
   ChartErrorStateProps,
   ChartColorKey,
 } from './components/charts';
+
+// Centralized Dynamic Currency Formatting & Exact Monetary Arithmetic
+export {
+  formatCurrency,
+  isSupportedCurrency,
+  getCurrencySymbol,
+  SUPPORTED_CURRENCIES,
+  parseMonetaryDecimal,
+  decimalToString,
+  addMonetaryAmounts,
+  multiplyMonetaryAmount,
+  sumMonetaryAmounts,
+  compareMonetaryAmounts,
+} from './utils/currency';
+export type { SupportedCurrency, FormatCurrencyOptions, ExactDecimal } from './utils/currency';
+

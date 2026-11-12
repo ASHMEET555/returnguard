@@ -209,8 +209,8 @@ def test_5_valid_key_returns_200_and_exact_contract(client):
     assert data["tier"] in ["LOW", "MEDIUM", "HIGH", "CRITICAL"]
 
 
-# 6. Body merchant_id differs from key's merchant -> 400
-def test_6_body_merchant_differs_from_key_merchant_returns_400(client):
+# 6. Body merchant_id differs from key's merchant -> 403
+def test_6_body_merchant_differs_from_key_merchant_returns_403(client):
     _, plain_key = helper_create_key("merch_owner_1")
     conflicting_payload = dict(SAMPLE_SCORE_PAYLOAD)
     conflicting_payload["merchant_id"] = "merch_intruder_2"
@@ -220,7 +220,7 @@ def test_6_body_merchant_differs_from_key_merchant_returns_400(client):
         json=conflicting_payload,
         headers={"Authorization": f"Bearer {plain_key}"},
     )
-    assert response.status_code == 400
+    assert response.status_code == 403
     assert "does not match authenticated merchant" in response.json()["detail"]
 
 
@@ -299,7 +299,7 @@ def test_10_key_a_cannot_produce_audit_rows_under_merchant_b(client):
         json=spoof_payload,
         headers={"Authorization": f"Bearer {key_a}"},
     )
-    assert response.status_code == 400
+    assert response.status_code == 403
 
     # Ensure NO audit row was created under merchant B
     db = SessionLocal()

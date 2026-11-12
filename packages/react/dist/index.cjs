@@ -5080,10 +5080,20 @@ __export(index_exports, {
   RiskScoreBadge: () => RiskScoreBadge,
   RiskSummary: () => RiskSummary,
   RulesPage: () => RulesPage,
+  SUPPORTED_CURRENCIES: () => SUPPORTED_CURRENCIES,
   TransactionsGrid: () => TransactionsGrid,
   TransactionsPage: () => TransactionsPage,
+  addMonetaryAmounts: () => addMonetaryAmounts,
   calculatePercentage: () => calculatePercentage,
+  compareMonetaryAmounts: () => compareMonetaryAmounts,
+  decimalToString: () => decimalToString,
+  formatCurrency: () => formatCurrency,
   formatMetricValue: () => formatMetricValue,
+  getCurrencySymbol: () => getCurrencySymbol,
+  isSupportedCurrency: () => isSupportedCurrency,
+  multiplyMonetaryAmount: () => multiplyMonetaryAmount,
+  parseMonetaryDecimal: () => parseMonetaryDecimal,
+  sumMonetaryAmounts: () => sumMonetaryAmounts,
   useCustomerProfile: () => useCustomerProfile,
   useCustomers: () => useCustomers,
   useModelPerformance: () => useModelPerformance,
@@ -5105,11 +5115,25 @@ var ReturnGuardProvider = ({
   client,
   clientOptions,
   configuration,
-  defaultTheme = "dark",
+  defaultTheme = "light",
+  theme: propTheme,
+  onThemeChange,
   defaultCurrency = "USD",
   children
 }) => {
-  const [theme, setTheme] = (0, import_react.useState)(defaultTheme);
+  const [internalTheme, setInternalTheme] = (0, import_react.useState)(propTheme || defaultTheme);
+  const currentTheme = propTheme || internalTheme;
+  (0, import_react.useEffect)(() => {
+    if (propTheme) {
+      setInternalTheme(propTheme);
+    }
+  }, [propTheme]);
+  const handleSetTheme = (newTheme) => {
+    setInternalTheme(newTheme);
+    if (onThemeChange) {
+      onThemeChange(newTheme);
+    }
+  };
   const [currency, setCurrency] = (0, import_react.useState)((configuration == null ? void 0 : configuration.currency) || defaultCurrency);
   const [dateRange, setDateRange] = (0, import_react.useState)("30d");
   const resolvedClient = (0, import_react.useMemo)(() => {
@@ -5118,22 +5142,22 @@ var ReturnGuardProvider = ({
     throw new Error('ReturnGuardProvider requires either a "client" or "clientOptions" prop.');
   }, [client, clientOptions]);
   (0, import_react.useEffect)(() => {
-    document.documentElement.setAttribute("data-rg-theme", theme);
-  }, [theme]);
+    document.documentElement.setAttribute("data-rg-theme", currentTheme);
+  }, [currentTheme]);
   const value2 = (0, import_react.useMemo)(
     () => ({
       client: resolvedClient,
-      theme,
-      setTheme,
+      theme: currentTheme,
+      setTheme: handleSetTheme,
       currency,
       setCurrency,
       dateRange,
       setDateRange,
       configuration
     }),
-    [resolvedClient, theme, currency, dateRange, configuration]
+    [resolvedClient, currentTheme, currency, dateRange, configuration]
   );
-  return /* @__PURE__ */ import_react.default.createElement(ReturnGuardContext.Provider, { value: value2 }, /* @__PURE__ */ import_react.default.createElement("div", { className: `rg-root rg-theme-${theme}` }, children));
+  return /* @__PURE__ */ import_react.default.createElement(ReturnGuardContext.Provider, { value: value2 }, /* @__PURE__ */ import_react.default.createElement("div", { className: `rg-root rg-theme-${currentTheme}` }, children));
 };
 function useReturnGuard() {
   const context = (0, import_react.useContext)(ReturnGuardContext);
@@ -5490,6 +5514,196 @@ var RiskScoreBadge = ({
 
 // src/components/RiskSummary.tsx
 var import_react6 = __toESM(require("react"), 1);
+
+// src/utils/currency.ts
+var SUPPORTED_CURRENCIES = ["USD", "INR", "EUR", "GBP", "CAD", "AUD"];
+var ZERO = BigInt(0);
+var ONE = BigInt(1);
+var TWO = BigInt(2);
+var TEN = BigInt(10);
+var CURRENCY_CONFIGS = {
+  USD: { symbol: "$", locale: "en-US", prefix: "$" },
+  INR: { symbol: "\u20B9", locale: "en-IN", prefix: "\u20B9" },
+  EUR: { symbol: "\u20AC", locale: "de-DE", prefix: "\u20AC" },
+  GBP: { symbol: "\xA3", locale: "en-GB", prefix: "\xA3" },
+  CAD: { symbol: "CA$", locale: "en-CA", prefix: "CA$" },
+  AUD: { symbol: "A$", locale: "en-AU", prefix: "A$" }
+};
+function isSupportedCurrency(currency) {
+  if (typeof currency !== "string") return false;
+  return SUPPORTED_CURRENCIES.includes(currency.toUpperCase().trim());
+}
+function getCurrencySymbol(currency) {
+  if (!currency || !isSupportedCurrency(currency)) return null;
+  return CURRENCY_CONFIGS[currency.toUpperCase().trim()].prefix;
+}
+function parseMonetaryDecimal(value2) {
+  if (value2 === null || value2 === void 0) {
+    return null;
+  }
+  if (typeof value2 === "bigint") {
+    return { digits: value2, scale: 0 };
+  }
+  if (typeof value2 === "number") {
+    if (!Number.isSafeInteger(value2)) {
+      return null;
+    }
+    const intVal = Object.is(value2, -0) ? 0 : value2;
+    return { digits: BigInt(intVal), scale: 0 };
+  }
+  if (typeof value2 !== "string") {
+    return null;
+  }
+  const trimmed = value2.trim();
+  if (trimmed === "") {
+    return null;
+  }
+  if (!/^[+-]?(?:\d+\.?\d*|\.\d+)$/.test(trimmed)) {
+    return null;
+  }
+  const isNegative = trimmed.startsWith("-");
+  const unsigned = trimmed.replace(/^[+-]/, "");
+  if (unsigned === "" || unsigned === ".") {
+    return null;
+  }
+  let intPart;
+  let fracPart;
+  if (unsigned.includes(".")) {
+    const parts = unsigned.split(".");
+    intPart = parts[0] || "0";
+    fracPart = parts[1] || "";
+  } else {
+    intPart = unsigned;
+    fracPart = "";
+  }
+  intPart = intPart.replace(/^0+(?=\d)/, "");
+  if (intPart === "") intPart = "0";
+  const scale = fracPart.length;
+  const combined = intPart + fracPart;
+  const rawBig = BigInt(combined);
+  const digits = isNegative ? -rawBig : rawBig;
+  return { digits, scale };
+}
+function decimalToString(decimal) {
+  const { digits, scale } = decimal;
+  const isNegative = digits < ZERO;
+  const absDigits = isNegative ? -digits : digits;
+  let str = absDigits.toString();
+  if (scale === 0) {
+    return (isNegative ? "-" : "") + str;
+  }
+  if (str.length <= scale) {
+    str = str.padStart(scale + 1, "0");
+  }
+  const intPart = str.slice(0, str.length - scale);
+  const fracPart = str.slice(str.length - scale);
+  return (isNegative ? "-" : "") + intPart + "." + fracPart;
+}
+function addMonetaryAmounts(a2, b) {
+  const decA = parseMonetaryDecimal(a2);
+  const decB = parseMonetaryDecimal(b);
+  if (!decA || !decB) {
+    throw new Error(`Invalid monetary amount in addMonetaryAmounts: a=${a2}, b=${b}`);
+  }
+  const maxScale = Math.max(decA.scale, decB.scale);
+  const scaleDiffA = BigInt(maxScale - decA.scale);
+  const scaleDiffB = BigInt(maxScale - decB.scale);
+  const scaledA = decA.digits * TEN ** scaleDiffA;
+  const scaledB = decB.digits * TEN ** scaleDiffB;
+  const sumDigits = scaledA + scaledB;
+  return decimalToString({ digits: sumDigits, scale: maxScale });
+}
+function multiplyMonetaryAmount(amount, quantity) {
+  const decAmount = parseMonetaryDecimal(amount);
+  const decQty = parseMonetaryDecimal(quantity);
+  if (!decAmount || !decQty) {
+    throw new Error(`Invalid monetary amount in multiplyMonetaryAmount: amount=${amount}, qty=${quantity}`);
+  }
+  const prodDigits = decAmount.digits * decQty.digits;
+  const prodScale = decAmount.scale + decQty.scale;
+  return decimalToString({ digits: prodDigits, scale: prodScale });
+}
+function sumMonetaryAmounts(amounts) {
+  if (amounts.length === 0) return "0.00";
+  let total = "0.00";
+  for (const amt of amounts) {
+    total = addMonetaryAmounts(total, amt);
+  }
+  return total;
+}
+function compareMonetaryAmounts(a2, b) {
+  const decA = parseMonetaryDecimal(a2);
+  const decB = parseMonetaryDecimal(b);
+  if (!decA || !decB) {
+    throw new Error(`Invalid monetary amount in compareMonetaryAmounts: a=${a2}, b=${b}`);
+  }
+  const maxScale = Math.max(decA.scale, decB.scale);
+  const scaledA = decA.digits * TEN ** BigInt(maxScale - decA.scale);
+  const scaledB = decB.digits * TEN ** BigInt(maxScale - decB.scale);
+  if (scaledA < scaledB) return -1;
+  if (scaledA > scaledB) return 1;
+  return 0;
+}
+function addThousandsSeparators(intStr) {
+  return intStr.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+function formatCurrency(amount, currency, options = {}) {
+  var _a4;
+  const parsed = parseMonetaryDecimal(amount);
+  if (!parsed) {
+    return "--";
+  }
+  const targetDigits = (_a4 = options.fractionDigits) != null ? _a4 : 2;
+  const isNegative = parsed.digits < ZERO;
+  const absDigits = isNegative ? -parsed.digits : parsed.digits;
+  let roundedDigits;
+  if (parsed.scale === targetDigits) {
+    roundedDigits = absDigits;
+  } else if (parsed.scale < targetDigits) {
+    const diff = BigInt(targetDigits - parsed.scale);
+    roundedDigits = absDigits * TEN ** diff;
+  } else {
+    const diff = BigInt(parsed.scale - targetDigits);
+    const factor = TEN ** diff;
+    const quotient = absDigits / factor;
+    const remainder = absDigits % factor;
+    const half = factor / TWO;
+    if (remainder >= half) {
+      roundedDigits = quotient + ONE;
+    } else {
+      roundedDigits = quotient;
+    }
+  }
+  let rawStr = roundedDigits.toString();
+  let intPart;
+  let fracPart;
+  if (targetDigits > 0) {
+    if (rawStr.length <= targetDigits) {
+      rawStr = rawStr.padStart(targetDigits + 1, "0");
+    }
+    intPart = rawStr.slice(0, rawStr.length - targetDigits);
+    fracPart = rawStr.slice(rawStr.length - targetDigits);
+  } else {
+    intPart = rawStr;
+    fracPart = "";
+  }
+  const formattedInt = addThousandsSeparators(intPart);
+  const formattedDecimal = targetDigits > 0 ? `${formattedInt}.${fracPart}` : formattedInt;
+  const sign2 = isNegative && roundedDigits !== ZERO ? "-" : "";
+  if (!currency || typeof currency !== "string" || currency.trim() === "") {
+    return `${sign2}${formattedDecimal} (CURRENCY NOT SPECIFIED)`;
+  }
+  const normalizedCode = currency.toUpperCase().trim();
+  if (!isSupportedCurrency(normalizedCode)) {
+    return `${sign2}${formattedDecimal} ${normalizedCode}`;
+  }
+  const config2 = CURRENCY_CONFIGS[normalizedCode];
+  const symbolPart = config2.prefix;
+  if (options.showCode) {
+    return `${sign2}${symbolPart}${formattedDecimal} ${normalizedCode}`;
+  }
+  return `${sign2}${symbolPart}${formattedDecimal}`;
+}
 
 // src/components/icons.tsx
 var import_react5 = __toESM(require("react"), 1);
@@ -6126,6 +6340,7 @@ var RiskSummary = ({
   subtitle = "Real-time payment authorization & risk metrics for merchant",
   className = ""
 }) => {
+  const { currency } = useReturnGuard();
   const hookSummary = useRiskSummary();
   const summary = propData != null ? propData : hookSummary.data;
   const loading = propLoading != null ? propLoading : propData ? false : hookSummary.loading;
@@ -6176,7 +6391,7 @@ var RiskSummary = ({
     metrics.includes("review") && /* @__PURE__ */ import_react6.default.createElement("div", { className: "rg-stat-card", style: { padding: "14px 16px" } }, /* @__PURE__ */ import_react6.default.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } }, /* @__PURE__ */ import_react6.default.createElement("span", { className: "rg-stat-label" }, "Review Hold"), /* @__PURE__ */ import_react6.default.createElement(AlertTriangleIcon, { size: 16 })), /* @__PURE__ */ import_react6.default.createElement("div", { className: "rg-stat-value", style: { fontSize: 24, marginTop: 8, color: "var(--rg-med-text, #f59e0b)" } }, loading ? "--" : `${reviewPct}%`), /* @__PURE__ */ import_react6.default.createElement("div", { style: { fontSize: 11, color: "var(--rg-text-muted)", marginTop: 4 } }, loading ? "--" : `${reviewCount} pending review`)),
     metrics.includes("block") && /* @__PURE__ */ import_react6.default.createElement("div", { className: "rg-stat-card", style: { padding: "14px 16px" } }, /* @__PURE__ */ import_react6.default.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } }, /* @__PURE__ */ import_react6.default.createElement("span", { className: "rg-stat-label" }, "Blocked"), /* @__PURE__ */ import_react6.default.createElement(AlertTriangleIcon, { size: 16 })), /* @__PURE__ */ import_react6.default.createElement("div", { className: "rg-stat-value", style: { fontSize: 24, marginTop: 8, color: "var(--rg-high-text, #ef4444)" } }, loading ? "--" : `${blockPct}%`), /* @__PURE__ */ import_react6.default.createElement("div", { style: { fontSize: 11, color: "var(--rg-text-muted)", marginTop: 4 } }, loading ? "--" : `${blockCount} rejected`)),
     metrics.includes("avgScore") && /* @__PURE__ */ import_react6.default.createElement("div", { className: "rg-stat-card", style: { padding: "14px 16px" } }, /* @__PURE__ */ import_react6.default.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } }, /* @__PURE__ */ import_react6.default.createElement("span", { className: "rg-stat-label" }, "Avg Risk Score"), /* @__PURE__ */ import_react6.default.createElement(AnalyticsIcon, { size: 16 })), /* @__PURE__ */ import_react6.default.createElement("div", { className: "rg-stat-value", style: { fontSize: 24, marginTop: 8 } }, loading ? "--" : Math.round(avgScore * 100), /* @__PURE__ */ import_react6.default.createElement("span", { style: { fontSize: 13, color: "var(--rg-text-muted)" } }, " / 100")), /* @__PURE__ */ import_react6.default.createElement("div", { style: { fontSize: 11, color: "var(--rg-text-muted)", marginTop: 4 } }, "Model candidate_lgbm_v1")),
-    metrics.includes("volume") && /* @__PURE__ */ import_react6.default.createElement("div", { className: "rg-stat-card", style: { padding: "14px 16px" } }, /* @__PURE__ */ import_react6.default.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } }, /* @__PURE__ */ import_react6.default.createElement("span", { className: "rg-stat-label" }, "Scored Volume"), /* @__PURE__ */ import_react6.default.createElement(TransactionsIcon, { size: 16 })), /* @__PURE__ */ import_react6.default.createElement("div", { className: "rg-stat-value", style: { fontSize: 24, marginTop: 8 } }, loading ? "--" : `\u20B9${totalVolume.toLocaleString()}`), /* @__PURE__ */ import_react6.default.createElement("div", { style: { fontSize: 11, color: "var(--rg-text-muted)", marginTop: 4 } }, "Authorized volume"))
+    metrics.includes("volume") && /* @__PURE__ */ import_react6.default.createElement("div", { className: "rg-stat-card", style: { padding: "14px 16px" } }, /* @__PURE__ */ import_react6.default.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } }, /* @__PURE__ */ import_react6.default.createElement("span", { className: "rg-stat-label" }, "Scored Volume"), /* @__PURE__ */ import_react6.default.createElement(TransactionsIcon, { size: 16 })), /* @__PURE__ */ import_react6.default.createElement("div", { className: "rg-stat-value", style: { fontSize: 24, marginTop: 8 } }, loading ? "--" : formatCurrency(totalVolume, currency)), /* @__PURE__ */ import_react6.default.createElement("div", { style: { fontSize: 11, color: "var(--rg-text-muted)", marginTop: 4 } }, "Authorized volume"))
   ));
 };
 
@@ -56221,7 +56436,7 @@ var exponentOutOfRange = decimalError + "Exponent out of range: ";
 var mathfloor = Math.floor;
 var mathpow = Math.pow;
 var isDecimal = /^(\d+(\.\d*)?|\.\d+)(e[+-]?\d+)?$/i;
-var ONE;
+var ONE2;
 var BASE = 1e7;
 var LOG_BASE = 7;
 var MAX_SAFE_INTEGER = 9007199254740991;
@@ -56293,10 +56508,10 @@ P.logarithm = P.log = function(base) {
     base = new Ctor(10);
   } else {
     base = new Ctor(base);
-    if (base.s < 1 || base.eq(ONE)) throw Error(decimalError + "NaN");
+    if (base.s < 1 || base.eq(ONE2)) throw Error(decimalError + "NaN");
   }
   if (x2.s < 1) throw Error(decimalError + (x2.s ? "NaN" : "-Infinity"));
-  if (x2.eq(ONE)) return new Ctor(0);
+  if (x2.eq(ONE2)) return new Ctor(0);
   external = false;
   r2 = divide(ln(x2, wpr), ln(base, wpr), wpr);
   external = true;
@@ -56467,15 +56682,15 @@ P.toNumber = function() {
 };
 P.toPower = P.pow = function(y2) {
   var e, k2, pr, r2, sign2, yIsInt, x2 = this, Ctor = x2.constructor, guard = 12, yn = +(y2 = new Ctor(y2));
-  if (!y2.s) return new Ctor(ONE);
+  if (!y2.s) return new Ctor(ONE2);
   x2 = new Ctor(x2);
   if (!x2.s) {
     if (y2.s < 1) throw Error(decimalError + "Infinity");
     return x2;
   }
-  if (x2.eq(ONE)) return x2;
+  if (x2.eq(ONE2)) return x2;
   pr = Ctor.precision;
-  if (y2.eq(ONE)) return round2(x2, pr);
+  if (y2.eq(ONE2)) return round2(x2, pr);
   e = y2.e;
   k2 = y2.d.length - 1;
   yIsInt = e >= k2;
@@ -56483,7 +56698,7 @@ P.toPower = P.pow = function(y2) {
   if (!yIsInt) {
     if (sign2 < 0) throw Error(decimalError + "NaN");
   } else if ((k2 = yn < 0 ? -yn : yn) <= MAX_SAFE_INTEGER) {
-    r2 = new Ctor(ONE);
+    r2 = new Ctor(ONE2);
     e = Math.ceil(pr / LOG_BASE + 4);
     external = false;
     for (; ; ) {
@@ -56497,7 +56712,7 @@ P.toPower = P.pow = function(y2) {
       truncate(x2.d, e);
     }
     external = true;
-    return y2.s < 0 ? new Ctor(ONE).div(r2) : round2(r2, pr);
+    return y2.s < 0 ? new Ctor(ONE2).div(r2) : round2(r2, pr);
   }
   sign2 = sign2 < 0 && y2.d[Math.max(e, k2)] & 1 ? -1 : 1;
   x2.s = 1;
@@ -56751,7 +56966,7 @@ var divide = /* @__PURE__ */ (function() {
 function exp(x2, sd) {
   var denominator, guard, pow2, sum, t, wpr, i = 0, k2 = 0, Ctor = x2.constructor, pr = Ctor.precision;
   if (getBase10Exponent(x2) > 16) throw Error(exponentOutOfRange + getBase10Exponent(x2));
-  if (!x2.s) return new Ctor(ONE);
+  if (!x2.s) return new Ctor(ONE2);
   if (sd == null) {
     external = false;
     wpr = pr;
@@ -56765,7 +56980,7 @@ function exp(x2, sd) {
   }
   guard = Math.log(mathpow(2, k2)) / Math.LN10 * 2 + 5 | 0;
   wpr += guard;
-  denominator = pow2 = sum = new Ctor(ONE);
+  denominator = pow2 = sum = new Ctor(ONE2);
   Ctor.precision = wpr;
   for (; ; ) {
     pow2 = round2(pow2.times(x2), wpr);
@@ -56800,7 +57015,7 @@ function getZeroString(k2) {
 function ln(y2, sd) {
   var c2, c0, denominator, e, numerator, sum, t, wpr, x2, n = 1, guard = 10, x3 = y2, xd = x3.d, Ctor = x3.constructor, pr = Ctor.precision;
   if (x3.s < 1) throw Error(decimalError + (x3.s ? "NaN" : "-Infinity"));
-  if (x3.eq(ONE)) return new Ctor(0);
+  if (x3.eq(ONE2)) return new Ctor(0);
   if (sd == null) {
     external = false;
     wpr = pr;
@@ -56836,7 +57051,7 @@ function ln(y2, sd) {
     Ctor.precision = pr;
     return sd == null ? (external = true, round2(x3, pr)) : x3;
   }
-  sum = numerator = x3 = divide(x3.minus(ONE), x3.plus(ONE), wpr);
+  sum = numerator = x3 = divide(x3.minus(ONE2), x3.plus(ONE2), wpr);
   x2 = round2(x3.times(x3), wpr);
   denominator = 3;
   for (; ; ) {
@@ -57153,7 +57368,7 @@ function config(obj) {
   return this;
 }
 var Decimal = clone(defaults);
-ONE = new Decimal(1);
+ONE2 = new Decimal(1);
 var decimal_default = Decimal;
 
 // node_modules/recharts-scale/es6/util/utils.js
@@ -70286,7 +70501,7 @@ function calculatePercentage(value2, total, decimals = 1) {
   const pct = value2 / total * 100;
   return Number(pct.toFixed(decimals));
 }
-function formatMetricValue(value2, format2 = "count", currencyCode = "INR") {
+function formatMetricValue(value2, format2 = "count", currencyCode) {
   if (value2 === void 0 || value2 === null || !Number.isFinite(value2)) {
     return "\u2014";
   }
@@ -70296,12 +70511,7 @@ function formatMetricValue(value2, format2 = "count", currencyCode = "INR") {
     case "ratio":
       return value2.toFixed(4);
     case "currency":
-      return new Intl.NumberFormat("en-IN", {
-        style: "currency",
-        currency: currencyCode,
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-      }).format(value2);
+      return formatCurrency(value2, currencyCode);
     case "count":
     default:
       return new Intl.NumberFormat("en-US").format(Math.round(value2));
@@ -70677,7 +70887,7 @@ var TransactionsGrid = ({
         minWidth: 180,
         flex: 1.3,
         valueGetter: () => "Not Integrated (Provider Owned)",
-        cellRenderer: () => /* @__PURE__ */ import_react85.default.createElement("span", { style: { fontSize: 12, color: "var(--rg-text-muted)", fontStyle: "italic" } }, "Provider Owned (ShopPoint)")
+        cellRenderer: () => /* @__PURE__ */ import_react85.default.createElement("span", { style: { fontSize: 12, color: "var(--rg-text-muted)", fontStyle: "italic" } }, "Provider Owned (Merchant Gateway)")
       },
       {
         field: "model_version",
@@ -70744,7 +70954,12 @@ var TransactionsGrid = ({
 
 // src/components/DetailDrawer.tsx
 var import_react86 = __toESM(require("react"), 1);
-var DetailDrawer = ({ decisionId, onClose }) => {
+var DetailDrawer = ({
+  decisionId,
+  onClose,
+  lineItems: propLineItems,
+  currency: propCurrency
+}) => {
   var _a4, _b3, _c, _d, _e, _f, _g;
   const { decision, audit, loading, error } = useTransactionRisk(decisionId);
   const drawerRef = (0, import_react86.useRef)(null);
@@ -70806,6 +71021,71 @@ var DetailDrawer = ({ decisionId, onClose }) => {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [decisionId, handleClose]);
+  const resolvedCurrency = (0, import_react86.useMemo)(() => {
+    var _a5, _b4;
+    if (propCurrency) return propCurrency;
+    if ((_b4 = (_a5 = audit == null ? void 0 : audit.data) == null ? void 0 : _a5.order_summary) == null ? void 0 : _b4.currency) return audit.data.order_summary.currency;
+    if (decision == null ? void 0 : decision.currency) return decision.currency;
+    return null;
+  }, [propCurrency, audit, decision]);
+  const resolvedLineItems = (0, import_react86.useMemo)(() => {
+    var _a5, _b4, _c2, _d2;
+    if (propLineItems && propLineItems.length > 0) return propLineItems;
+    if (((_a5 = audit == null ? void 0 : audit.data) == null ? void 0 : _a5.line_items) && audit.data.line_items.length > 0) {
+      return audit.data.line_items;
+    }
+    if (((_c2 = (_b4 = audit == null ? void 0 : audit.data) == null ? void 0 : _b4.order_summary) == null ? void 0 : _c2.items) && audit.data.order_summary.items.length > 0) {
+      return audit.data.order_summary.items;
+    }
+    if ((decision == null ? void 0 : decision.line_items) && decision.line_items.length > 0) {
+      return decision.line_items;
+    }
+    if (((_d2 = decision == null ? void 0 : decision.order_summary) == null ? void 0 : _d2.items) && decision.order_summary.items.length > 0) {
+      return decision.order_summary.items;
+    }
+    return [];
+  }, [propLineItems, audit, decision]);
+  const hasMixedCurrencies = (0, import_react86.useMemo)(() => {
+    if (resolvedLineItems.length <= 1) return false;
+    const currencies = new Set(
+      resolvedLineItems.map((item) => (item.currency || resolvedCurrency || "").toUpperCase().trim()).filter(Boolean)
+    );
+    return currencies.size > 1;
+  }, [resolvedLineItems, resolvedCurrency]);
+  const itemsTotalAmount = (0, import_react86.useMemo)(() => {
+    if (resolvedLineItems.length === 0 || hasMixedCurrencies) return "0.00";
+    let total = "0.00";
+    for (const item of resolvedLineItems) {
+      const qty = item.quantity != null ? item.quantity : 1;
+      let lineTotal = null;
+      if (item.total_amount != null) {
+        if (parseMonetaryDecimal(item.total_amount) === null) {
+          return null;
+        }
+        lineTotal = typeof item.total_amount === "string" ? item.total_amount : decimalToString(parseMonetaryDecimal(item.total_amount));
+      } else if (item.unit_price != null) {
+        if (parseMonetaryDecimal(item.unit_price) === null) {
+          return null;
+        }
+        try {
+          lineTotal = multiplyMonetaryAmount(item.unit_price, qty);
+        } catch (e) {
+          return null;
+        }
+      } else {
+        return null;
+      }
+      try {
+        total = addMonetaryAmounts(total, lineTotal);
+      } catch (e) {
+        return null;
+      }
+    }
+    return total;
+  }, [resolvedLineItems, hasMixedCurrencies]);
+  const totalQuantity = (0, import_react86.useMemo)(() => {
+    return resolvedLineItems.reduce((acc, item) => acc + (Number(item.quantity) || 0), 0);
+  }, [resolvedLineItems]);
   if (!decisionId) return null;
   return /* @__PURE__ */ import_react86.default.createElement(
     "div",
@@ -70837,7 +71117,33 @@ var DetailDrawer = ({ decisionId, onClose }) => {
         /* @__PURE__ */ import_react86.default.createElement(CloseIcon, { size: 14, "aria-hidden": "true" }),
         /* @__PURE__ */ import_react86.default.createElement("span", null, "Close")
       )),
-      /* @__PURE__ */ import_react86.default.createElement("div", { className: "rg-drawer-body" }, loading && /* @__PURE__ */ import_react86.default.createElement("div", { className: "rg-drawer-loading", role: "status" }, /* @__PURE__ */ import_react86.default.createElement("span", { className: "rg-loading-spinner", "aria-hidden": "true" }), /* @__PURE__ */ import_react86.default.createElement("span", null, "Loading scoring audit and explanation...")), error && /* @__PURE__ */ import_react86.default.createElement("div", { className: "rg-drawer-error", role: "alert" }, /* @__PURE__ */ import_react86.default.createElement("div", { className: "rg-drawer-error-title" }, "Failed to load decision"), /* @__PURE__ */ import_react86.default.createElement("div", { className: "rg-drawer-error-msg" }, error.message)), decision && /* @__PURE__ */ import_react86.default.createElement(import_react86.default.Fragment, null, /* @__PURE__ */ import_react86.default.createElement("section", { className: "rg-drawer-section" }, /* @__PURE__ */ import_react86.default.createElement("div", { className: "rg-drawer-section-title" }, "ReturnGuard Recommendation"), /* @__PURE__ */ import_react86.default.createElement("div", { className: "rg-verdict-bar" }, /* @__PURE__ */ import_react86.default.createElement(RiskBadge, { score: decision.risk_score }), /* @__PURE__ */ import_react86.default.createElement(RiskBadge, { action: decision.suggested_action }), /* @__PURE__ */ import_react86.default.createElement("span", { className: "rg-verdict-severity" }, "Severity: ", /* @__PURE__ */ import_react86.default.createElement("strong", null, decision.severity || "unknown"))), /* @__PURE__ */ import_react86.default.createElement("p", { className: "rg-verdict-note" }, "ReturnGuard evaluates transaction characteristics and recommends an operational hold/action. Actual capture or decline is executed independently by the payment provider.")), /* @__PURE__ */ import_react86.default.createElement("section", { className: "rg-drawer-section" }, /* @__PURE__ */ import_react86.default.createElement("div", { className: "rg-drawer-section-title" }, "Why This Was Flagged"), decision.reason_codes && decision.reason_codes.length > 0 ? /* @__PURE__ */ import_react86.default.createElement("div", { className: "rg-reason-grid" }, decision.reason_codes.map((rc) => /* @__PURE__ */ import_react86.default.createElement("div", { key: rc.feature, className: "rg-reason-chip" }, /* @__PURE__ */ import_react86.default.createElement("span", { className: "rg-reason-feature" }, rc.feature), /* @__PURE__ */ import_react86.default.createElement("span", { className: "rg-reason-divider" }, ":"), /* @__PURE__ */ import_react86.default.createElement("span", { className: "rg-reason-direction" }, rc.direction)))) : /* @__PURE__ */ import_react86.default.createElement("div", { className: "rg-drawer-empty-text" }, "No specific rule or anomaly triggers flagged for this transaction.")), /* @__PURE__ */ import_react86.default.createElement("section", { className: "rg-drawer-section" }, /* @__PURE__ */ import_react86.default.createElement("div", { className: "rg-drawer-section-title" }, "Payment & Processor Context"), /* @__PURE__ */ import_react86.default.createElement("div", { className: "rg-context-grid" }, /* @__PURE__ */ import_react86.default.createElement("div", { className: "rg-context-item" }, /* @__PURE__ */ import_react86.default.createElement("span", { className: "rg-context-label" }, "Order ID"), /* @__PURE__ */ import_react86.default.createElement("span", { className: "rg-context-value rg-font-mono" }, decision.order_id || "--")), /* @__PURE__ */ import_react86.default.createElement("div", { className: "rg-context-item" }, /* @__PURE__ */ import_react86.default.createElement("span", { className: "rg-context-label" }, "Channel"), /* @__PURE__ */ import_react86.default.createElement("span", { className: "rg-context-value" }, decision.channel || "web")), /* @__PURE__ */ import_react86.default.createElement("div", { className: "rg-context-item" }, /* @__PURE__ */ import_react86.default.createElement("span", { className: "rg-context-label" }, "ReturnGuard Mode"), /* @__PURE__ */ import_react86.default.createElement("span", { className: "rg-context-value" }, decision.shadow ? "Shadow (Non-blocking)" : "Live Policy Enforcement")), /* @__PURE__ */ import_react86.default.createElement("div", { className: "rg-context-item" }, /* @__PURE__ */ import_react86.default.createElement("span", { className: "rg-context-label" }, "Payment Processor Status"), /* @__PURE__ */ import_react86.default.createElement("span", { className: "rg-context-value rg-text-muted rg-italic" }, "Not Verified (Owned by Merchant / ShopPoint)")))), /* @__PURE__ */ import_react86.default.createElement("section", { className: "rg-drawer-section" }, /* @__PURE__ */ import_react86.default.createElement("div", { className: "rg-drawer-section-title" }, "Audit Trail & Signals"), /* @__PURE__ */ import_react86.default.createElement("div", { className: "rg-audit-container" }, audit ? /* @__PURE__ */ import_react86.default.createElement("div", { className: "rg-audit-grid" }, /* @__PURE__ */ import_react86.default.createElement("div", { className: "rg-audit-row" }, /* @__PURE__ */ import_react86.default.createElement("span", { className: "rg-audit-label" }, "Decision ID:"), /* @__PURE__ */ import_react86.default.createElement("span", { className: "rg-audit-value rg-font-mono" }, ((_b3 = (_a4 = audit.data) == null ? void 0 : _a4.decision) == null ? void 0 : _b3.decision_id) || "--")), /* @__PURE__ */ import_react86.default.createElement("div", { className: "rg-audit-row" }, /* @__PURE__ */ import_react86.default.createElement("span", { className: "rg-audit-label" }, "Order ID:"), /* @__PURE__ */ import_react86.default.createElement("span", { className: "rg-audit-value rg-font-mono" }, ((_d = (_c = audit.data) == null ? void 0 : _c.decision) == null ? void 0 : _d.order_id) || "--")), /* @__PURE__ */ import_react86.default.createElement("div", { className: "rg-audit-row" }, /* @__PURE__ */ import_react86.default.createElement("span", { className: "rg-audit-label" }, "Policy Action:"), /* @__PURE__ */ import_react86.default.createElement("span", { className: "rg-audit-value" }, ((_f = (_e = audit.data) == null ? void 0 : _e.policy_trace) == null ? void 0 : _f.policy_action) || "--")), /* @__PURE__ */ import_react86.default.createElement("div", { className: "rg-audit-row" }, /* @__PURE__ */ import_react86.default.createElement("span", { className: "rg-audit-label" }, "Reconstructed Features:"), /* @__PURE__ */ import_react86.default.createElement("span", { className: "rg-audit-value" }, Object.keys(((_g = audit.data) == null ? void 0 : _g.feature_snapshot) || {}).length, " features verified"))) : /* @__PURE__ */ import_react86.default.createElement("div", { className: "rg-drawer-empty-text" }, "Basic audit event snapshot recorded. Full feature reconstruction stored in tenant repository.")))))
+      /* @__PURE__ */ import_react86.default.createElement("div", { className: "rg-drawer-body" }, loading && /* @__PURE__ */ import_react86.default.createElement("div", { className: "rg-drawer-loading", role: "status" }, /* @__PURE__ */ import_react86.default.createElement("span", { className: "rg-loading-spinner", "aria-hidden": "true" }), /* @__PURE__ */ import_react86.default.createElement("span", null, "Loading scoring audit and explanation...")), error && /* @__PURE__ */ import_react86.default.createElement("div", { className: "rg-drawer-error", role: "alert" }, /* @__PURE__ */ import_react86.default.createElement("div", { className: "rg-drawer-error-title" }, "Failed to load decision"), /* @__PURE__ */ import_react86.default.createElement("div", { className: "rg-drawer-error-msg" }, error.message)), decision && /* @__PURE__ */ import_react86.default.createElement(import_react86.default.Fragment, null, /* @__PURE__ */ import_react86.default.createElement("section", { className: "rg-drawer-section" }, /* @__PURE__ */ import_react86.default.createElement("div", { className: "rg-drawer-section-title" }, "ReturnGuard Recommendation"), /* @__PURE__ */ import_react86.default.createElement("div", { className: "rg-verdict-bar" }, /* @__PURE__ */ import_react86.default.createElement(RiskBadge, { score: decision.risk_score }), /* @__PURE__ */ import_react86.default.createElement(RiskBadge, { action: decision.suggested_action }), /* @__PURE__ */ import_react86.default.createElement("span", { className: "rg-verdict-severity" }, "Severity: ", /* @__PURE__ */ import_react86.default.createElement("strong", null, decision.severity || "unknown"))), /* @__PURE__ */ import_react86.default.createElement("p", { className: "rg-verdict-note" }, "ReturnGuard evaluates transaction characteristics and recommends an operational hold/action. Actual capture or decline is executed independently by the payment provider.")), /* @__PURE__ */ import_react86.default.createElement("section", { className: "rg-drawer-section" }, /* @__PURE__ */ import_react86.default.createElement("div", { className: "rg-drawer-section-title" }, "Why This Was Flagged"), decision.reason_codes && decision.reason_codes.length > 0 ? /* @__PURE__ */ import_react86.default.createElement("div", { className: "rg-reason-grid" }, decision.reason_codes.map((rc) => /* @__PURE__ */ import_react86.default.createElement("div", { key: rc.feature, className: "rg-reason-chip" }, /* @__PURE__ */ import_react86.default.createElement("span", { className: "rg-reason-feature" }, rc.feature), /* @__PURE__ */ import_react86.default.createElement("span", { className: "rg-reason-divider" }, ":"), /* @__PURE__ */ import_react86.default.createElement("span", { className: "rg-reason-direction" }, rc.direction)))) : /* @__PURE__ */ import_react86.default.createElement("div", { className: "rg-drawer-empty-text" }, "No specific rule or anomaly triggers flagged for this transaction.")), /* @__PURE__ */ import_react86.default.createElement("section", { className: "rg-drawer-section" }, /* @__PURE__ */ import_react86.default.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 } }, /* @__PURE__ */ import_react86.default.createElement("div", { className: "rg-drawer-section-title", style: { margin: 0 } }, "Purchased Line Items"), resolvedLineItems.length > 0 && /* @__PURE__ */ import_react86.default.createElement("span", { style: { fontSize: 11, color: "var(--rg-text-muted)" } }, totalQuantity, " ", totalQuantity === 1 ? "item" : "items")), resolvedLineItems.length > 0 ? /* @__PURE__ */ import_react86.default.createElement("div", { style: { overflowX: "auto", border: "1px solid var(--rg-border)", borderRadius: 6, background: "var(--rg-bg-secondary)" } }, /* @__PURE__ */ import_react86.default.createElement("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: 12, textAlign: "left" } }, /* @__PURE__ */ import_react86.default.createElement("thead", null, /* @__PURE__ */ import_react86.default.createElement("tr", { style: { borderBottom: "1px solid var(--rg-border)", background: "var(--rg-bg-tertiary)", color: "var(--rg-text-secondary)" } }, /* @__PURE__ */ import_react86.default.createElement("th", { style: { padding: "8px 10px", fontWeight: 600 } }, "Item"), /* @__PURE__ */ import_react86.default.createElement("th", { style: { padding: "8px 10px", fontWeight: 600 } }, "SKU"), /* @__PURE__ */ import_react86.default.createElement("th", { style: { padding: "8px 10px", fontWeight: 600, textAlign: "right" } }, "Qty"), /* @__PURE__ */ import_react86.default.createElement("th", { style: { padding: "8px 10px", fontWeight: 600, textAlign: "right" } }, "Unit Price"), /* @__PURE__ */ import_react86.default.createElement("th", { style: { padding: "8px 10px", fontWeight: 600, textAlign: "right" } }, "Total"))), /* @__PURE__ */ import_react86.default.createElement("tbody", null, resolvedLineItems.map((item, idx) => {
+        const qty = item.quantity != null ? item.quantity : 1;
+        const qtyDisplay = item.quantity != null ? String(item.quantity) : "1";
+        let itemTotal = null;
+        if (item.total_amount != null) {
+          itemTotal = parseMonetaryDecimal(item.total_amount) !== null ? item.total_amount : null;
+        } else if (item.unit_price != null && parseMonetaryDecimal(item.unit_price) !== null) {
+          try {
+            itemTotal = multiplyMonetaryAmount(item.unit_price, qty);
+          } catch (e) {
+            itemTotal = null;
+          }
+        }
+        const itemCurrency = item.currency || resolvedCurrency;
+        return /* @__PURE__ */ import_react86.default.createElement(
+          "tr",
+          {
+            key: item.id || item.sku || idx,
+            style: { borderBottom: idx < resolvedLineItems.length - 1 ? "1px solid var(--rg-border-subtle, rgba(0,0,0,0.06))" : "none" }
+          },
+          /* @__PURE__ */ import_react86.default.createElement("td", { style: { padding: "8px 10px" } }, /* @__PURE__ */ import_react86.default.createElement("div", { style: { fontWeight: 600, color: "var(--rg-text)" } }, item.name || item.description || `Item #${idx + 1}`), item.description && item.name && /* @__PURE__ */ import_react86.default.createElement("div", { style: { fontSize: 11, color: "var(--rg-text-muted)" } }, item.description)),
+          /* @__PURE__ */ import_react86.default.createElement("td", { style: { padding: "8px 10px", fontFamily: "monospace", fontSize: 11, color: "var(--rg-text-secondary)" } }, item.sku ? item.sku : "--"),
+          /* @__PURE__ */ import_react86.default.createElement("td", { style: { padding: "8px 10px", textAlign: "right", color: "var(--rg-text)" } }, qtyDisplay),
+          /* @__PURE__ */ import_react86.default.createElement("td", { style: { padding: "8px 10px", textAlign: "right", color: "var(--rg-text)" } }, formatCurrency(item.unit_price, itemCurrency)),
+          /* @__PURE__ */ import_react86.default.createElement("td", { style: { padding: "8px 10px", textAlign: "right", fontWeight: 600, color: "var(--rg-text)" } }, itemTotal != null ? formatCurrency(itemTotal, itemCurrency) : "--")
+        );
+      })), /* @__PURE__ */ import_react86.default.createElement("tfoot", null, /* @__PURE__ */ import_react86.default.createElement("tr", { style: { borderTop: "2px solid var(--rg-border)", background: "var(--rg-bg-tertiary)" } }, /* @__PURE__ */ import_react86.default.createElement("td", { colSpan: 2, style: { padding: "8px 10px", fontWeight: 700, color: "var(--rg-text)" } }, "Total Items (", totalQuantity, ")"), /* @__PURE__ */ import_react86.default.createElement("td", { style: { padding: "8px 10px", textAlign: "right", fontWeight: 700, color: "var(--rg-text)" } }, totalQuantity), /* @__PURE__ */ import_react86.default.createElement("td", { style: { padding: "8px 10px", textAlign: "right", color: "var(--rg-text-muted)" } }, "--"), /* @__PURE__ */ import_react86.default.createElement("td", { style: { padding: "8px 10px", textAlign: "right", fontWeight: 700, color: "var(--rg-text)" } }, hasMixedCurrencies ? "-- (Mixed Currencies)" : itemsTotalAmount != null ? formatCurrency(itemsTotalAmount, resolvedCurrency) : "--"))))) : /* @__PURE__ */ import_react86.default.createElement("div", { className: "rg-drawer-empty-text" }, "No line items recorded for this order projection.")), /* @__PURE__ */ import_react86.default.createElement("section", { className: "rg-drawer-section" }, /* @__PURE__ */ import_react86.default.createElement("div", { className: "rg-drawer-section-title" }, "Payment & Processor Context"), /* @__PURE__ */ import_react86.default.createElement("div", { className: "rg-context-grid" }, /* @__PURE__ */ import_react86.default.createElement("div", { className: "rg-context-item" }, /* @__PURE__ */ import_react86.default.createElement("span", { className: "rg-context-label" }, "Order ID"), /* @__PURE__ */ import_react86.default.createElement("span", { className: "rg-context-value rg-font-mono" }, decision.order_id || "--")), /* @__PURE__ */ import_react86.default.createElement("div", { className: "rg-context-item" }, /* @__PURE__ */ import_react86.default.createElement("span", { className: "rg-context-label" }, "Channel"), /* @__PURE__ */ import_react86.default.createElement("span", { className: "rg-context-value" }, decision.channel || "web")), /* @__PURE__ */ import_react86.default.createElement("div", { className: "rg-context-item" }, /* @__PURE__ */ import_react86.default.createElement("span", { className: "rg-context-label" }, "Currency"), /* @__PURE__ */ import_react86.default.createElement("span", { className: "rg-context-value" }, resolvedCurrency || "Not Specified")), /* @__PURE__ */ import_react86.default.createElement("div", { className: "rg-context-item" }, /* @__PURE__ */ import_react86.default.createElement("span", { className: "rg-context-label" }, "ReturnGuard Mode"), /* @__PURE__ */ import_react86.default.createElement("span", { className: "rg-context-value" }, decision.shadow ? "Shadow (Non-blocking)" : "Live Policy Enforcement")), /* @__PURE__ */ import_react86.default.createElement("div", { className: "rg-context-item" }, /* @__PURE__ */ import_react86.default.createElement("span", { className: "rg-context-label" }, "Payment Processor Status"), /* @__PURE__ */ import_react86.default.createElement("span", { className: "rg-context-value rg-text-muted rg-italic" }, "Not Verified (Owned by Merchant Application)")))), /* @__PURE__ */ import_react86.default.createElement("section", { className: "rg-drawer-section" }, /* @__PURE__ */ import_react86.default.createElement("div", { className: "rg-drawer-section-title" }, "Audit Trail & Signals"), /* @__PURE__ */ import_react86.default.createElement("div", { className: "rg-audit-container" }, audit ? /* @__PURE__ */ import_react86.default.createElement("div", { className: "rg-audit-grid" }, /* @__PURE__ */ import_react86.default.createElement("div", { className: "rg-audit-row" }, /* @__PURE__ */ import_react86.default.createElement("span", { className: "rg-audit-label" }, "Decision ID:"), /* @__PURE__ */ import_react86.default.createElement("span", { className: "rg-audit-value rg-font-mono" }, ((_b3 = (_a4 = audit.data) == null ? void 0 : _a4.decision) == null ? void 0 : _b3.decision_id) || "--")), /* @__PURE__ */ import_react86.default.createElement("div", { className: "rg-audit-row" }, /* @__PURE__ */ import_react86.default.createElement("span", { className: "rg-audit-label" }, "Order ID:"), /* @__PURE__ */ import_react86.default.createElement("span", { className: "rg-audit-value rg-font-mono" }, ((_d = (_c = audit.data) == null ? void 0 : _c.decision) == null ? void 0 : _d.order_id) || "--")), /* @__PURE__ */ import_react86.default.createElement("div", { className: "rg-audit-row" }, /* @__PURE__ */ import_react86.default.createElement("span", { className: "rg-audit-label" }, "Policy Action:"), /* @__PURE__ */ import_react86.default.createElement("span", { className: "rg-audit-value" }, ((_f = (_e = audit.data) == null ? void 0 : _e.policy_trace) == null ? void 0 : _f.policy_action) || "--")), /* @__PURE__ */ import_react86.default.createElement("div", { className: "rg-audit-row" }, /* @__PURE__ */ import_react86.default.createElement("span", { className: "rg-audit-label" }, "Reconstructed Features:"), /* @__PURE__ */ import_react86.default.createElement("span", { className: "rg-audit-value" }, Object.keys(((_g = audit.data) == null ? void 0 : _g.feature_snapshot) || {}).length, " features verified"))) : /* @__PURE__ */ import_react86.default.createElement("div", { className: "rg-drawer-empty-text" }, "Basic audit event snapshot recorded. Full feature reconstruction stored in tenant repository.")))))
     )
   );
 };
@@ -72779,9 +73085,10 @@ var InvestigationsPage = ({
   testAssessment,
   testTimeline,
   testItems,
+  testPack,
   onActionTrigger
 }) => {
-  var _a4, _b3, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q;
+  var _a4, _b3, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v;
   const { client } = useReturnGuard();
   const [selectedId, setSelectedId] = (0, import_react93.useState)(initialInvestigationId || null);
   const [statusFilter, setStatusFilter] = (0, import_react93.useState)("ALL");
@@ -72795,6 +73102,11 @@ var InvestigationsPage = ({
   const [timeline, setTimeline] = (0, import_react93.useState)(testTimeline || []);
   const [loadingDetail, setLoadingDetail] = (0, import_react93.useState)(false);
   const [detailError, setDetailError] = (0, import_react93.useState)(null);
+  const [evidencePack, setEvidencePack] = (0, import_react93.useState)(testPack || null);
+  const [loadingPack, setLoadingPack] = (0, import_react93.useState)(false);
+  const [packError, setPackError] = (0, import_react93.useState)(null);
+  const [downloadingFormat, setDownloadingFormat] = (0, import_react93.useState)(null);
+  const [downloadError, setDownloadError] = (0, import_react93.useState)(null);
   const [actionError, setActionError] = (0, import_react93.useState)(null);
   const [actionSuccess, setActionSuccess] = (0, import_react93.useState)(null);
   const [isNoteModalOpen, setIsNoteModalOpen] = (0, import_react93.useState)(false);
@@ -72836,12 +73148,15 @@ var InvestigationsPage = ({
       if (testDetail !== void 0) return;
       if (!client) return;
       setLoadingDetail(true);
+      setLoadingPack(true);
       setDetailError(null);
+      setPackError(null);
       try {
-        const [detRes, assessRes, timeRes] = await Promise.allSettled([
+        const [detRes, assessRes, timeRes, packRes] = await Promise.allSettled([
           client.investigations.get(id),
           client.investigations.getAssessment(id),
-          client.investigations.getTimeline(id)
+          client.investigations.getTimeline(id),
+          client.investigations.getPack(id, "json")
         ]);
         if (detRes.status === "fulfilled") {
           setDetail(detRes.value);
@@ -72858,14 +73173,50 @@ var InvestigationsPage = ({
         } else {
           setTimeline([]);
         }
+        if (packRes.status === "fulfilled") {
+          setEvidencePack(packRes.value);
+        } else {
+          setEvidencePack(null);
+        }
       } catch (err) {
         setDetailError(err.message || "Error fetching case data");
       } finally {
         setLoadingDetail(false);
+        setLoadingPack(false);
       }
     },
-    [client, testDetail]
+    [client, testDetail, testPack]
   );
+  const handleDownloadPack = async (format2 = "json") => {
+    var _a5, _b4;
+    if (!selectedId || downloadingFormat) return;
+    setDownloadingFormat(format2);
+    setDownloadError(null);
+    if (onActionTrigger) {
+      onActionTrigger("downloadPack", { id: selectedId, format: format2 });
+    }
+    try {
+      const data = await client.investigations.getPack(selectedId, format2);
+      const content = typeof data === "string" ? data : JSON.stringify(data, null, 2);
+      const mimeType = format2 === "md" ? "text/markdown;charset=utf-8" : "application/json;charset=utf-8";
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      const ver = (evidencePack == null ? void 0 : evidencePack.version) || ((_b4 = (_a5 = detail == null ? void 0 : detail.approval) == null ? void 0 : _a5.pack_hash) == null ? void 0 : _b4.substring(0, 8)) || "1";
+      link.download = `evidence_pack_${selectedId}_v${ver}.${format2}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      setActionSuccess(`Evidence pack downloaded successfully as ${format2.toUpperCase()}.`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to download evidence pack";
+      setDownloadError(msg);
+    } finally {
+      setDownloadingFormat(null);
+    }
+  };
   (0, import_react93.useEffect)(() => {
     if (selectedId) {
       fetchDetail(selectedId);
@@ -73258,7 +73609,7 @@ var InvestigationsPage = ({
         }
       },
       "\u2190 Back to Queue"
-    ), /* @__PURE__ */ import_react93.default.createElement("div", null, /* @__PURE__ */ import_react93.default.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8 } }, /* @__PURE__ */ import_react93.default.createElement("h2", { style: { margin: 0, fontSize: 18, fontWeight: 700, fontFamily: "monospace" } }, (detail == null ? void 0 : detail.id) || selectedId), renderStatusBadge(currentStatus)), /* @__PURE__ */ import_react93.default.createElement("div", { style: { fontSize: 12, color: "var(--rg-text-muted)", marginTop: 2 } }, "Case Hash: ", /* @__PURE__ */ import_react93.default.createElement("code", { style: { fontFamily: "monospace" } }, (detail == null ? void 0 : detail.case_hash) || "pending")))), /* @__PURE__ */ import_react93.default.createElement("div", { style: { textAlign: "right" } }, /* @__PURE__ */ import_react93.default.createElement("div", { style: { fontSize: 11, color: "var(--rg-text-muted)" } }, "Dispute Amount"), /* @__PURE__ */ import_react93.default.createElement("div", { style: { fontSize: 18, fontWeight: 700, color: "var(--rg-text-primary)" } }, (detail == null ? void 0 : detail.currency) || "USD", " ", Number((detail == null ? void 0 : detail.amount) || 0).toFixed(2)))), loadingDetail && /* @__PURE__ */ import_react93.default.createElement("div", { style: { color: "var(--rg-text-muted)", marginBottom: 12 } }, "Loading investigation details and LLM assessment..."), detailError && /* @__PURE__ */ import_react93.default.createElement(
+    ), /* @__PURE__ */ import_react93.default.createElement("div", null, /* @__PURE__ */ import_react93.default.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8 } }, /* @__PURE__ */ import_react93.default.createElement("h2", { style: { margin: 0, fontSize: 18, fontWeight: 700, fontFamily: "monospace" } }, (detail == null ? void 0 : detail.id) || selectedId), renderStatusBadge(currentStatus)), /* @__PURE__ */ import_react93.default.createElement("div", { style: { fontSize: 12, color: "var(--rg-text-muted)", marginTop: 2 } }, "Case Hash: ", /* @__PURE__ */ import_react93.default.createElement("code", { style: { fontFamily: "monospace" } }, (detail == null ? void 0 : detail.case_hash) || "pending")))), /* @__PURE__ */ import_react93.default.createElement("div", { style: { textAlign: "right" } }, /* @__PURE__ */ import_react93.default.createElement("div", { style: { fontSize: 11, color: "var(--rg-text-muted)" } }, "Dispute Amount"), /* @__PURE__ */ import_react93.default.createElement("div", { style: { fontSize: 18, fontWeight: 700, color: "var(--rg-text-primary)" } }, formatCurrency(detail == null ? void 0 : detail.amount, detail == null ? void 0 : detail.currency)))), loadingDetail && /* @__PURE__ */ import_react93.default.createElement("div", { style: { color: "var(--rg-text-muted)", marginBottom: 12 } }, "Loading investigation details and LLM assessment..."), detailError && /* @__PURE__ */ import_react93.default.createElement(
       "div",
       {
         className: "rg-alert-error",
@@ -73658,18 +74009,92 @@ var InvestigationsPage = ({
         },
         "Notice: LLM output is strictly advisory. It does not alter probability scores, policy tiers, or model rules."
       )
-    ), /* @__PURE__ */ import_react93.default.createElement("div", { className: "rg-card", style: { padding: 16 } }, /* @__PURE__ */ import_react93.default.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 } }, /* @__PURE__ */ import_react93.default.createElement("h3", { style: { margin: 0, fontSize: 14, fontWeight: 700 } }, "Evidence Package Status"), /* @__PURE__ */ import_react93.default.createElement(
+    ), /* @__PURE__ */ import_react93.default.createElement("div", { className: "rg-card", style: { padding: 16 } }, /* @__PURE__ */ import_react93.default.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, flexWrap: "wrap", gap: 8 } }, /* @__PURE__ */ import_react93.default.createElement("div", null, /* @__PURE__ */ import_react93.default.createElement("h3", { style: { margin: 0, fontSize: 14, fontWeight: 700 } }, "Evidence Package & Structured Preview"), /* @__PURE__ */ import_react93.default.createElement("div", { style: { fontSize: 12, color: "var(--rg-text-muted)", marginTop: 2 } }, "Canonical evidence bundle compiled for dispute resolution and review.")), /* @__PURE__ */ import_react93.default.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8 } }, /* @__PURE__ */ import_react93.default.createElement(
       "span",
       {
         style: {
           fontSize: 12,
           fontWeight: 700,
-          color: isApprovedPack ? "var(--rg-low-text)" : "var(--rg-med-text)"
+          color: isApprovedPack ? "var(--rg-low-text)" : "var(--rg-med-text)",
+          background: isApprovedPack ? "var(--rg-low-bg)" : "var(--rg-med-bg)",
+          padding: "3px 8px",
+          borderRadius: 4
         }
       },
       "\u25CF ",
-      ((_p = detail == null ? void 0 : detail.approval) == null ? void 0 : _p.decision) || "DRAFT / PENDING"
-    )), /* @__PURE__ */ import_react93.default.createElement("div", { style: { fontSize: 12, color: "var(--rg-text-secondary)", marginBottom: 8 } }, "Pack Hash: ", /* @__PURE__ */ import_react93.default.createElement("code", { style: { fontFamily: "monospace" } }, currentPackHash)), ((_q = detail == null ? void 0 : detail.approval) == null ? void 0 : _q.approver_sub) && /* @__PURE__ */ import_react93.default.createElement("div", { style: { fontSize: 12, color: "var(--rg-text-muted)" } }, "Approved by: ", /* @__PURE__ */ import_react93.default.createElement("span", { style: { fontWeight: 600 } }, detail.approval.approver_sub), " at", " ", detail.approval.decided_at ? new Date(detail.approval.decided_at).toLocaleString() : "")), /* @__PURE__ */ import_react93.default.createElement("div", { className: "rg-card", style: { padding: 16 } }, /* @__PURE__ */ import_react93.default.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 } }, /* @__PURE__ */ import_react93.default.createElement("h3", { style: { margin: 0, fontSize: 14, fontWeight: 700 } }, "Step Timeline & Audit History"), /* @__PURE__ */ import_react93.default.createElement("span", { style: { fontSize: 11, color: "var(--rg-text-muted)" } }, timeline.length, " recorded events")), timeline.length === 0 ? /* @__PURE__ */ import_react93.default.createElement("div", { style: { fontSize: 12, color: "var(--rg-text-muted)", padding: 12, textAlign: "center" } }, "No steps recorded in timeline.") : /* @__PURE__ */ import_react93.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10 } }, timeline.map((step2, idx) => /* @__PURE__ */ import_react93.default.createElement(
+      ((_p = detail == null ? void 0 : detail.approval) == null ? void 0 : _p.decision) || (evidencePack ? "COMPILED" : "DRAFT / PENDING")
+    ), /* @__PURE__ */ import_react93.default.createElement(
+      "button",
+      {
+        type: "button",
+        className: "rg-btn-secondary",
+        style: { fontSize: 11, padding: "4px 8px", cursor: downloadingFormat ? "not-allowed" : "pointer" },
+        disabled: Boolean(downloadingFormat) || !evidencePack && !((_q = detail == null ? void 0 : detail.approval) == null ? void 0 : _q.pack_hash),
+        onClick: () => handleDownloadPack("json"),
+        title: "Download canonical evidence pack in JSON format"
+      },
+      downloadingFormat === "json" ? "Downloading..." : "\u2B07 JSON"
+    ), /* @__PURE__ */ import_react93.default.createElement(
+      "button",
+      {
+        type: "button",
+        className: "rg-btn-secondary",
+        style: { fontSize: 11, padding: "4px 8px", cursor: downloadingFormat ? "not-allowed" : "pointer" },
+        disabled: Boolean(downloadingFormat) || !evidencePack && !((_r = detail == null ? void 0 : detail.approval) == null ? void 0 : _r.pack_hash),
+        onClick: () => handleDownloadPack("md"),
+        title: "Download canonical evidence pack in Markdown format"
+      },
+      downloadingFormat === "md" ? "Downloading..." : "\u2B07 Markdown"
+    ))), downloadError && /* @__PURE__ */ import_react93.default.createElement("div", { className: "rg-alert-error", style: { fontSize: 12, padding: "6px 10px", marginBottom: 8 } }, downloadError), loadingPack && /* @__PURE__ */ import_react93.default.createElement("div", { style: { fontSize: 12, color: "var(--rg-text-muted)", padding: "12px 0" } }, /* @__PURE__ */ import_react93.default.createElement("span", { className: "rg-loading-spinner", "aria-hidden": "true", style: { display: "inline-block", marginRight: 6 } }), "Loading evidence pack preview..."), packError && /* @__PURE__ */ import_react93.default.createElement("div", { style: { fontSize: 12, color: "var(--rg-high-text)", background: "var(--rg-high-bg)", padding: 8, borderRadius: 4, marginBottom: 8 } }, "Failed to load evidence pack: ", packError), /* @__PURE__ */ import_react93.default.createElement(
+      "div",
+      {
+        style: {
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+          gap: 8,
+          background: "var(--rg-bg-secondary)",
+          padding: 10,
+          borderRadius: 6,
+          border: "1px solid var(--rg-border)",
+          marginBottom: 12,
+          fontSize: 11
+        }
+      },
+      /* @__PURE__ */ import_react93.default.createElement("div", null, /* @__PURE__ */ import_react93.default.createElement("span", { style: { color: "var(--rg-text-muted)" } }, "Pack Version: "), /* @__PURE__ */ import_react93.default.createElement("strong", { style: { color: "var(--rg-text)" } }, "v", (evidencePack == null ? void 0 : evidencePack.version) || (((_s = detail == null ? void 0 : detail.approval) == null ? void 0 : _s.pack_hash) ? "1" : "--"))),
+      /* @__PURE__ */ import_react93.default.createElement("div", null, /* @__PURE__ */ import_react93.default.createElement("span", { style: { color: "var(--rg-text-muted)" } }, "Pack Hash: "), /* @__PURE__ */ import_react93.default.createElement("code", { style: { fontFamily: "monospace", color: "var(--rg-text)" } }, ((evidencePack == null ? void 0 : evidencePack.pack_hash) || currentPackHash || "--").substring(0, 16), "...")),
+      /* @__PURE__ */ import_react93.default.createElement("div", null, /* @__PURE__ */ import_react93.default.createElement("span", { style: { color: "var(--rg-text-muted)" } }, "Transaction: "), /* @__PURE__ */ import_react93.default.createElement("span", { style: { color: "var(--rg-text)", fontFamily: "monospace" } }, ((_t = evidencePack == null ? void 0 : evidencePack.target_transaction) == null ? void 0 : _t.transaction_alias) || (detail == null ? void 0 : detail.transaction_id) || "--")),
+      /* @__PURE__ */ import_react93.default.createElement("div", null, /* @__PURE__ */ import_react93.default.createElement("span", { style: { color: "var(--rg-text-muted)" } }, "Dispute: "), /* @__PURE__ */ import_react93.default.createElement("strong", { style: { color: "var(--rg-text)" } }, formatCurrency(detail == null ? void 0 : detail.amount, detail == null ? void 0 : detail.currency)))
+    ), /* @__PURE__ */ import_react93.default.createElement("div", { style: { marginBottom: 12 } }, /* @__PURE__ */ import_react93.default.createElement("div", { style: { fontSize: 12, fontWeight: 600, color: "var(--rg-text)", marginBottom: 6 } }, "Attached Documents & Evidence (", ((_u = evidencePack == null ? void 0 : evidencePack.attached_documents) == null ? void 0 : _u.length) || 0, ")"), (evidencePack == null ? void 0 : evidencePack.attached_documents) && evidencePack.attached_documents.length > 0 ? /* @__PURE__ */ import_react93.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 6 } }, evidencePack.attached_documents.map((doc, dIdx) => /* @__PURE__ */ import_react93.default.createElement(
+      "div",
+      {
+        key: doc.document_id || dIdx,
+        style: {
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          padding: "6px 10px",
+          background: "var(--rg-bg-secondary)",
+          border: "1px solid var(--rg-border)",
+          borderRadius: 4,
+          fontSize: 11
+        }
+      },
+      /* @__PURE__ */ import_react93.default.createElement("div", null, /* @__PURE__ */ import_react93.default.createElement(
+        "span",
+        {
+          style: {
+            fontWeight: 700,
+            background: "var(--rg-bg-tertiary)",
+            padding: "2px 6px",
+            borderRadius: 3,
+            marginRight: 6,
+            color: "var(--rg-text-secondary)"
+          }
+        },
+        doc.document_type || "DOCUMENT"
+      ), /* @__PURE__ */ import_react93.default.createElement("span", { style: { color: "var(--rg-text)", fontWeight: 600 } }, doc.filename || doc.source || `Document #${dIdx + 1}`), doc.description && /* @__PURE__ */ import_react93.default.createElement("span", { style: { color: "var(--rg-text-muted)", marginLeft: 8 } }, "\u2014 ", doc.description)),
+      doc.created_at && /* @__PURE__ */ import_react93.default.createElement("span", { style: { color: "var(--rg-text-muted)" } }, new Date(doc.created_at).toLocaleDateString())
+    ))) : /* @__PURE__ */ import_react93.default.createElement("div", { style: { fontSize: 11, color: "var(--rg-text-muted)", fontStyle: "italic" } }, loadingPack ? "Loading documents..." : "No standalone documents attached to this evidence package.")), ((_v = detail == null ? void 0 : detail.approval) == null ? void 0 : _v.approver_sub) && /* @__PURE__ */ import_react93.default.createElement("div", { style: { fontSize: 11, color: "var(--rg-text-muted)", borderTop: "1px solid var(--rg-border-subtle)", paddingTop: 8 } }, "Approved by: ", /* @__PURE__ */ import_react93.default.createElement("span", { style: { fontWeight: 600, color: "var(--rg-text)" } }, detail.approval.approver_sub), " at", " ", detail.approval.decided_at ? new Date(detail.approval.decided_at).toLocaleString() : "")), /* @__PURE__ */ import_react93.default.createElement("div", { className: "rg-card", style: { padding: 16 } }, /* @__PURE__ */ import_react93.default.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 } }, /* @__PURE__ */ import_react93.default.createElement("h3", { style: { margin: 0, fontSize: 14, fontWeight: 700 } }, "Step Timeline & Audit History"), /* @__PURE__ */ import_react93.default.createElement("span", { style: { fontSize: 11, color: "var(--rg-text-muted)" } }, timeline.length, " recorded events")), timeline.length === 0 ? /* @__PURE__ */ import_react93.default.createElement("div", { style: { fontSize: 12, color: "var(--rg-text-muted)", padding: 12, textAlign: "center" } }, "No steps recorded in timeline.") : /* @__PURE__ */ import_react93.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10 } }, timeline.map((step2, idx) => /* @__PURE__ */ import_react93.default.createElement(
       "div",
       {
         key: step2.id || idx,
@@ -74378,7 +74803,7 @@ var ReportsPage = () => {
       }
     },
     disputeMeter.isZeroDisputes ? "Clean Processor Status" : disputeMeter.isExceedingCritical ? "Exceeds Reference Ceiling" : "Within Reference Limits"
-  )))), /* @__PURE__ */ import_react94.default.createElement("div", { className: "rg-reports-notice-box" }, /* @__PURE__ */ import_react94.default.createElement(AlertTriangleIcon, { size: 14, "aria-hidden": "true", style: { flexShrink: 0, marginTop: 1 } }), /* @__PURE__ */ import_react94.default.createElement("span", null, "Dispute records are populated via processor webhooks. Reference levels (0.65% early warning, 0.90% critical) reflect standard payment network dispute monitoring program thresholds. Historical time-series trend is omitted due to zero recorded disputes and absence of multi-period dispute telemetry.")))), /* @__PURE__ */ import_react94.default.createElement("section", { className: "rg-reports-footer-card", "aria-label": "Domain & Volume Governance" }, /* @__PURE__ */ import_react94.default.createElement("div", { className: "rg-reports-card-header" }, /* @__PURE__ */ import_react94.default.createElement("div", null, /* @__PURE__ */ import_react94.default.createElement("h3", { style: { margin: "0 0 4px 0", fontSize: 14, fontWeight: 600 } }, "Domain & Volume Governance"), /* @__PURE__ */ import_react94.default.createElement("p", { style: { margin: 0, fontSize: 12, color: "var(--rg-text-muted)" } }, "Tenant data partitioning and evaluated monetary volume disclosure.")), /* @__PURE__ */ import_react94.default.createElement("span", { className: "rg-reports-badge" }, "Tenant Isolated")), /* @__PURE__ */ import_react94.default.createElement("table", { className: "rg-reports-stat-table", "aria-label": "Evaluated volume and domain boundaries" }, /* @__PURE__ */ import_react94.default.createElement("tbody", null, /* @__PURE__ */ import_react94.default.createElement("tr", null, /* @__PURE__ */ import_react94.default.createElement("td", { className: "rg-reports-stat-label" }, "Cumulative Evaluated Order Volume"), /* @__PURE__ */ import_react94.default.createElement("td", { className: "rg-reports-stat-value" }, "INR ", totalVolumeInr.toLocaleString(void 0, { minimumFractionDigits: 2, maximumFractionDigits: 2 }))), /* @__PURE__ */ import_react94.default.createElement("tr", null, /* @__PURE__ */ import_react94.default.createElement("td", { className: "rg-reports-stat-label" }, "Tenant Scope"), /* @__PURE__ */ import_react94.default.createElement("td", { className: "rg-reports-stat-value", style: { fontFamily: "var(--rg-font-mono)" } }, (summary == null ? void 0 : summary.tenant_id) || "merch_shoppoint")), /* @__PURE__ */ import_react94.default.createElement("tr", null, /* @__PURE__ */ import_react94.default.createElement("td", { className: "rg-reports-stat-label" }, "Serving Model"), /* @__PURE__ */ import_react94.default.createElement("td", { className: "rg-reports-stat-value", style: { fontFamily: "var(--rg-font-mono)" } }, "candidate_lgbm_v1")), /* @__PURE__ */ import_react94.default.createElement("tr", null, /* @__PURE__ */ import_react94.default.createElement("td", { className: "rg-reports-stat-label" }, "Model Verification Mode"), /* @__PURE__ */ import_react94.default.createElement("td", { className: "rg-reports-stat-value" }, "Active (Shadow Mode)")))), /* @__PURE__ */ import_react94.default.createElement("div", { className: "rg-reports-notice-box" }, /* @__PURE__ */ import_react94.default.createElement(ShieldIcon, { size: 14, "aria-hidden": "true", style: { flexShrink: 0, marginTop: 1 } }), /* @__PURE__ */ import_react94.default.createElement("span", null, "Evaluated volume is aggregated from order records within the tenant partition. Individual risk score events store feature snapshots and ML reason codes rather than raw payment credentials."))));
+  )))), /* @__PURE__ */ import_react94.default.createElement("div", { className: "rg-reports-notice-box" }, /* @__PURE__ */ import_react94.default.createElement(AlertTriangleIcon, { size: 14, "aria-hidden": "true", style: { flexShrink: 0, marginTop: 1 } }), /* @__PURE__ */ import_react94.default.createElement("span", null, "Dispute records are populated via processor webhooks. Reference levels (0.65% early warning, 0.90% critical) reflect standard payment network dispute monitoring program thresholds. Historical time-series trend is omitted due to zero recorded disputes and absence of multi-period dispute telemetry.")))), /* @__PURE__ */ import_react94.default.createElement("section", { className: "rg-reports-footer-card", "aria-label": "Domain & Volume Governance" }, /* @__PURE__ */ import_react94.default.createElement("div", { className: "rg-reports-card-header" }, /* @__PURE__ */ import_react94.default.createElement("div", null, /* @__PURE__ */ import_react94.default.createElement("h3", { style: { margin: "0 0 4px 0", fontSize: 14, fontWeight: 600 } }, "Domain & Volume Governance"), /* @__PURE__ */ import_react94.default.createElement("p", { style: { margin: 0, fontSize: 12, color: "var(--rg-text-muted)" } }, "Tenant data partitioning and evaluated monetary volume disclosure.")), /* @__PURE__ */ import_react94.default.createElement("span", { className: "rg-reports-badge" }, "Tenant Isolated")), /* @__PURE__ */ import_react94.default.createElement("table", { className: "rg-reports-stat-table", "aria-label": "Evaluated volume and domain boundaries" }, /* @__PURE__ */ import_react94.default.createElement("tbody", null, /* @__PURE__ */ import_react94.default.createElement("tr", null, /* @__PURE__ */ import_react94.default.createElement("td", { className: "rg-reports-stat-label" }, "Cumulative Evaluated Order Volume"), /* @__PURE__ */ import_react94.default.createElement("td", { className: "rg-reports-stat-value" }, "INR ", totalVolumeInr.toLocaleString(void 0, { minimumFractionDigits: 2, maximumFractionDigits: 2 }))), /* @__PURE__ */ import_react94.default.createElement("tr", null, /* @__PURE__ */ import_react94.default.createElement("td", { className: "rg-reports-stat-label" }, "Tenant Scope"), /* @__PURE__ */ import_react94.default.createElement("td", { className: "rg-reports-stat-value", style: { fontFamily: "var(--rg-font-mono)" } }, (summary == null ? void 0 : summary.tenant_id) || "--")), /* @__PURE__ */ import_react94.default.createElement("tr", null, /* @__PURE__ */ import_react94.default.createElement("td", { className: "rg-reports-stat-label" }, "Serving Model"), /* @__PURE__ */ import_react94.default.createElement("td", { className: "rg-reports-stat-value", style: { fontFamily: "var(--rg-font-mono)" } }, "candidate_lgbm_v1")), /* @__PURE__ */ import_react94.default.createElement("tr", null, /* @__PURE__ */ import_react94.default.createElement("td", { className: "rg-reports-stat-label" }, "Model Verification Mode"), /* @__PURE__ */ import_react94.default.createElement("td", { className: "rg-reports-stat-value" }, "Active (Shadow Mode)")))), /* @__PURE__ */ import_react94.default.createElement("div", { className: "rg-reports-notice-box" }, /* @__PURE__ */ import_react94.default.createElement(ShieldIcon, { size: 14, "aria-hidden": "true", style: { flexShrink: 0, marginTop: 1 } }), /* @__PURE__ */ import_react94.default.createElement("span", null, "Evaluated volume is aggregated from order records within the tenant partition. Individual risk score events store feature snapshots and ML reason codes rather than raw payment credentials."))));
 };
 
 // src/components/MerchantDashboardTemplate.tsx
@@ -74395,7 +74820,7 @@ var DEFAULT_WORKSPACE_DEFS = {
 };
 var MerchantDashboardTemplate = ({
   brandTitle = "ReturnGuard",
-  merchantName = "ShopPoint",
+  merchantName = "Merchant Console",
   workspaces: propWorkspaces,
   defaultWorkspace = "overview",
   layout = "tabs",
@@ -74429,16 +74854,16 @@ var MerchantDashboardTemplate = ({
   const toggleTheme = () => {
     setTheme(theme === "dark" ? "light" : "dark");
   };
-  return /* @__PURE__ */ import_react95.default.createElement("div", { className: `rg-root rg-theme-${theme} rg-merchant-template`, style: { minHeight: "100%", display: "flex", flexDirection: "column" } }, /* @__PURE__ */ import_react95.default.createElement(
+  return /* @__PURE__ */ import_react95.default.createElement("div", { className: `rg-root rg-theme-${theme} rg-merchant-template`, style: { minHeight: "100%", display: "flex", flexDirection: "column", background: "var(--rg-bg-primary)" } }, /* @__PURE__ */ import_react95.default.createElement(
     "header",
     {
       style: {
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        padding: "12px 20px",
-        background: "var(--rg-bg-secondary, #1e293b)",
-        borderBottom: "1px solid var(--rg-border-primary, #334155)",
+        padding: "14px 24px",
+        background: "var(--rg-bg-secondary)",
+        borderBottom: "1px solid var(--rg-border)",
         flexWrap: "wrap",
         gap: 12
       }
@@ -74450,11 +74875,12 @@ var MerchantDashboardTemplate = ({
           width: 32,
           height: 32,
           borderRadius: 8,
-          background: "linear-gradient(135deg, #3b82f6, #1d4ed8)",
+          background: "linear-gradient(135deg, #2b2b52, #3b82f6)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          color: "#ffffff"
+          color: "#ffffff",
+          boxShadow: "0 2px 4px rgba(43, 43, 82, 0.25)"
         }
       },
       /* @__PURE__ */ import_react95.default.createElement(ShieldIcon, { size: 18 })
@@ -74470,13 +74896,15 @@ var MerchantDashboardTemplate = ({
           display: "flex",
           alignItems: "center",
           gap: 6,
-          padding: "5px 10px",
+          padding: "6px 12px",
           fontSize: 12,
+          fontWeight: 500,
           borderRadius: 6,
           background: "var(--rg-bg-tertiary)",
-          border: "1px solid var(--rg-border-primary)",
-          color: "var(--rg-text-secondary)",
-          cursor: "pointer"
+          border: "1px solid var(--rg-border)",
+          color: "var(--rg-text-primary)",
+          cursor: "pointer",
+          transition: "all 0.15s ease"
         }
       },
       theme === "dark" ? /* @__PURE__ */ import_react95.default.createElement(import_react95.default.Fragment, null, /* @__PURE__ */ import_react95.default.createElement(SunIcon, { size: 14 }), /* @__PURE__ */ import_react95.default.createElement("span", null, "Light")) : /* @__PURE__ */ import_react95.default.createElement(import_react95.default.Fragment, null, /* @__PURE__ */ import_react95.default.createElement(MoonIcon, { size: 14 }), /* @__PURE__ */ import_react95.default.createElement("span", null, "Dark"))
@@ -74487,10 +74915,10 @@ var MerchantDashboardTemplate = ({
       style: {
         display: "flex",
         alignItems: "center",
-        gap: 4,
-        padding: "8px 20px",
-        background: "var(--rg-bg-primary, #0f172a)",
-        borderBottom: "1px solid var(--rg-border-primary, #334155)",
+        gap: 6,
+        padding: "8px 24px",
+        background: "var(--rg-bg-tertiary)",
+        borderBottom: "1px solid var(--rg-border)",
         overflowX: "auto"
       }
     },
@@ -74510,16 +74938,16 @@ var MerchantDashboardTemplate = ({
             display: "flex",
             alignItems: "center",
             gap: 8,
-            padding: "6px 14px",
+            padding: "7px 16px",
             borderRadius: 6,
-            border: "none",
-            background: isActive ? "var(--rg-bg-secondary, #1e293b)" : "transparent",
-            color: isActive ? "var(--rg-text-primary, #ffffff)" : "var(--rg-text-secondary, #94a3b8)",
+            border: isActive ? "1px solid var(--rg-border)" : "1px solid transparent",
+            background: isActive ? "var(--rg-bg-secondary)" : "transparent",
+            color: isActive ? "var(--rg-accent)" : "var(--rg-text-secondary)",
             fontWeight: isActive ? 600 : 500,
             fontSize: 13,
             cursor: "pointer",
             transition: "all 0.15s ease",
-            borderBottom: isActive ? "2px solid #3b82f6" : "2px solid transparent"
+            boxShadow: isActive ? "0 1px 2px rgba(0,0,0,0.05)" : "none"
           }
         },
         Icon && /* @__PURE__ */ import_react95.default.createElement(Icon, { size: 15 }),
@@ -74887,10 +75315,20 @@ var ReturnGuardDashboard = ({
   RiskScoreBadge,
   RiskSummary,
   RulesPage,
+  SUPPORTED_CURRENCIES,
   TransactionsGrid,
   TransactionsPage,
+  addMonetaryAmounts,
   calculatePercentage,
+  compareMonetaryAmounts,
+  decimalToString,
+  formatCurrency,
   formatMetricValue,
+  getCurrencySymbol,
+  isSupportedCurrency,
+  multiplyMonetaryAmount,
+  parseMonetaryDecimal,
+  sumMonetaryAmounts,
   useCustomerProfile,
   useCustomers,
   useModelPerformance,

@@ -10,13 +10,14 @@ Protected by Bearer API Key authentication and strict merchant tenancy boundarie
 """
 
 import json
+import logging
+import re
 import uuid
 from typing import Any, Dict, List, Optional
-import logging
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 
 logger = logging.getLogger(__name__)
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
 from auth.api_keys import get_api_key_merchant
@@ -27,6 +28,41 @@ from db.session import get_db
 from services.score import ScoringService, get_scoring_service
 
 router = APIRouter(tags=["scoring"])
+
+
+def _validate_monetary_field(val: Any, field_name: str) -> None:
+    """
+    Validates a monetary value in accordance with ReturnGuard's exact monetary contract.
+    Canonical format: exact decimal strings (e.g. "0.10", "1234.56").
+    Temporary compatibility: safe integers (e.g. 100, 0, -50).
+    Strictly rejected: non-integer floats (e.g. 0.1, 1.005), unsafe integers (> 2^53-1), NaN, Infinity, booleans.
+    """
+    if val is None:
+        return
+    if isinstance(val, bool):
+        raise ValueError(f"Invalid monetary value in {field_name}: boolean is not allowed")
+    if isinstance(val, float):
+        raise ValueError(
+            f"Invalid monetary value in {field_name}: non-integer numeric float ({val}) is rejected. "
+            f"Monetary amounts must be provided as exact decimal strings (e.g. '0.10') or safe integers."
+        )
+    if isinstance(val, int):
+        if abs(val) > 9007199254740991:
+            raise ValueError(
+                f"Invalid monetary value in {field_name}: integer ({val}) exceeds IEEE-754 safe integer limit (9007199254740991)"
+            )
+        return
+    if isinstance(val, str):
+        s = val.strip()
+        if not re.match(r"^[+-]?(?:\d+\.?\d*|\.\d+)$", s):
+            raise ValueError(
+                f"Invalid monetary value in {field_name}: malformed decimal string '{val}'"
+            )
+        return
+    raise ValueError(
+        f"Invalid monetary value in {field_name}: unsupported type {type(val).__name__}. "
+        f"Expected decimal string or safe integer."
+    )
 
 
 class ReasonCode(BaseModel):
@@ -61,6 +97,49 @@ class ScoreRequest(BaseModel):
     force_unavailable: Optional[bool] = Field(
         False, description="Simulate model unavailable fallback"
     )
+    currency: Optional[str] = Field(default=None, description="Transaction currency (USD, INR, EUR, etc.)")
+    line_items: Optional[List[Dict[str, Any]]] = Field(default=None, description="Line items for order context")
+    order_summary: Optional[Dict[str, Any]] = Field(default=None, description="Structured order summary")
+
+    @field_validator("line_items")
+    @classmethod
+    def validate_line_items_monetary(
+        cls, items: Optional[List[Dict[str, Any]]]
+    ) -> Optional[List[Dict[str, Any]]]:
+        if not items:
+            return items
+        for idx, item in enumerate(items):
+            if not isinstance(item, dict):
+                raise ValueError(f"line_items[{idx}] must be an object")
+            if "unit_price" in item and item["unit_price"] is not None:
+                _validate_monetary_field(item["unit_price"], f"line_items[{idx}].unit_price")
+            if "total_amount" in item and item["total_amount"] is not None:
+                _validate_monetary_field(item["total_amount"], f"line_items[{idx}].total_amount")
+        return items
+
+    @field_validator("order_summary")
+    @classmethod
+    def validate_order_summary_monetary(
+        cls, summary: Optional[Dict[str, Any]]
+    ) -> Optional[Dict[str, Any]]:
+        if not summary or not isinstance(summary, dict):
+            return summary
+        if "total" in summary and summary["total"] is not None:
+            _validate_monetary_field(summary["total"], "order_summary.total")
+        items = summary.get("items")
+        if isinstance(items, list):
+            for idx, item in enumerate(items):
+                if isinstance(item, dict):
+                    if "unit_price" in item and item["unit_price"] is not None:
+                        _validate_monetary_field(
+                            item["unit_price"], f"order_summary.items[{idx}].unit_price"
+                        )
+                    if "total_amount" in item and item["total_amount"] is not None:
+                        _validate_monetary_field(
+                            item["total_amount"], f"order_summary.items[{idx}].total_amount"
+                        )
+        return summary
+
 
 
 class ScoreResponse(BaseModel):
@@ -109,10 +188,10 @@ def score_transaction(
     - Writes immutable audit record to audit_score_events stamped with auth_merchant_id.
     - Returns the complete scoring contract defined in 02-architecture.md Section G.
     """
-    # 1. Conflicting body merchant_id check
+    # 1. Conflicting body merchant_id check (403 Forbidden on tenant spoofing)
     if payload.merchant_id is not None and payload.merchant_id != auth_merchant_id:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_403_FORBIDDEN,
             detail=f"merchant_id in body ('{payload.merchant_id}') does not match authenticated merchant ('{auth_merchant_id}')",
         )
 
@@ -155,6 +234,13 @@ def score_transaction(
     # Persist audit record carrying authenticated merchant_id via tenant-scoped repository
     try:
         repo = TenantScopedRepository(db, auth_merchant_id)
+        order_sum: Dict[str, Any] = dict(payload.order_summary or {})
+        if payload.line_items and "items" not in order_sum:
+            order_sum["items"] = payload.line_items
+        if payload.currency and "currency" not in order_sum:
+            order_sum["currency"] = payload.currency
+        order_sum_json = json.dumps(order_sum) if order_sum else None
+
         audit_event = AuditScoreEvent(
             id=str(uuid.uuid4()),
             decision_id=decision_id,
@@ -176,6 +262,7 @@ def score_transaction(
             rule_hits_json=json.dumps(result.get("rule_hits", [])),
             ring_id=result.get("ring_id"),
             shadow=1 if result.get("shadow", True) else 0,
+            order_summary_json=order_sum_json,
         )
         repo.save_audit_score_event(audit_event)
     except Exception:
@@ -369,6 +456,20 @@ def get_decision_audit_reconstruction(
         for e in relay_events_rows
     ]
 
+    order_summary_data = None
+    line_items_data = None
+    if audit_row.order_summary_json:
+        try:
+            order_summary_data = json.loads(audit_row.order_summary_json)
+            if isinstance(order_summary_data, dict):
+                line_items_data = order_summary_data.get("items")
+            elif isinstance(order_summary_data, list):
+                line_items_data = order_summary_data
+                order_summary_data = {"items": line_items_data}
+        except Exception:
+            order_summary_data = None
+            line_items_data = None
+
     return {
         "status": "success",
         "data": {
@@ -416,6 +517,8 @@ def get_decision_audit_reconstruction(
             "rule_hits": rule_hits,
             "feature_snapshot": feature_snapshot,
             "relay_events": relay_events,
+            "order_summary": order_summary_data,
+            "line_items": line_items_data,
         },
     }
 

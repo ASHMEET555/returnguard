@@ -13,3 +13,4 @@ export { Transport } from "./transport";
 export * from "./errors";
 export * from "./types";
 export * from "./auth";
+export * from "./validation";

@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from auth.embed_tokens import AuthContext, require_read_or_review_auth
 from db.models import AuditScoreEvent, MerchantAudit
-from db.session import get_db
+from db.session import get_db, acquire_immediate_lock
 
 router = APIRouter(tags=["reviews"])
 
@@ -43,6 +43,8 @@ class ReviewSubmitRequest(BaseModel):
         pattern="^(approve|reject|escalate)$",
     )
     notes: Optional[str] = Field(None, description="Optional merchant review notes")
+    event_id: Optional[str] = Field(None, description="Deterministic outbox event identifier")
+    operation_id: Optional[str] = Field(None, description="Deterministic operation identifier")
 
 
 class ReviewSubmitResponse(BaseModel):
@@ -51,6 +53,7 @@ class ReviewSubmitResponse(BaseModel):
     action: str
     status: str
     updated_at: str
+    idempotent_replay: bool = False
 
 
 @router.get(
@@ -101,6 +104,7 @@ def list_reviews(
                 MerchantAudit.entity_id == item.decision_id,
                 MerchantAudit.entity_type == "decision_review",
             )
+            .order_by(MerchantAudit.created_at.desc())
             .first()
         )
 
@@ -113,6 +117,10 @@ def list_reviews(
             rev_at = audit_record.created_at.isoformat()
             rev_actor = audit_record.actor
             rev_notes = audit_record.details_json
+
+        # If filtering for pending, exclude items that already have a resolved merchant decision
+        if review_status == "pending" and audit_record:
+            continue
 
         review_items.append(
             ReviewItem(
@@ -150,7 +158,9 @@ def submit_review(
 ) -> ReviewSubmitResponse:
     """
     Submits a review decision (approve, reject, escalate) for a risk scoring decision.
-    Scoped strictly to authenticated tenant. Never retried automatically.
+    Scoped strictly to authenticated tenant.
+    Enforces stable originating event or operation identifier idempotency while
+    never suppressing distinct legitimate review operations.
     """
     # Verify decision exists for this tenant
     decision = (
@@ -164,9 +174,49 @@ def submit_review(
     if not decision:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Decision not found",
+            detail="Decision not found for authenticated merchant",
         )
 
+    # Idempotency check: look up by stable originating event or operation identifier
+    from sqlalchemy import or_
+    existing_audit = None
+    if payload.event_id or payload.operation_id:
+        conditions = []
+        if payload.event_id:
+            conditions.append(MerchantAudit.event_id == payload.event_id)
+        if payload.operation_id:
+            conditions.append(MerchantAudit.operation_id == payload.operation_id)
+        existing_audit = (
+            db.query(MerchantAudit)
+            .filter(
+                MerchantAudit.merchant_id == auth.tenant_id,
+                or_(*conditions),
+            )
+            .first()
+        )
+    else:
+        # Fallback deduplication by (merchant_id, entity_id, action)
+        existing_audit = (
+            db.query(MerchantAudit)
+            .filter(
+                MerchantAudit.merchant_id == auth.tenant_id,
+                MerchantAudit.entity_id == payload.decision_id,
+                MerchantAudit.action == payload.action,
+            )
+            .first()
+        )
+
+    if existing_audit:
+        return ReviewSubmitResponse(
+            review_id=existing_audit.id,
+            decision_id=payload.decision_id,
+            action=existing_audit.action,
+            status="resolved",
+            updated_at=existing_audit.created_at.isoformat(),
+            idempotent_replay=True,
+        )
+
+    acquire_immediate_lock(db)
     now = datetime.datetime.now(datetime.timezone.utc)
     review_id = f"rev_{uuid.uuid4().hex[:16]}"
     actor = auth.sub or f"user_{auth.tenant_id}"
@@ -177,6 +227,8 @@ def submit_review(
         action=payload.action,
         entity_type="decision_review",
         entity_id=payload.decision_id,
+        operation_id=payload.operation_id,
+        event_id=payload.event_id,
         actor=actor,
         details_json=payload.notes,
         created_at=now,
@@ -218,4 +270,5 @@ def submit_review(
         action=payload.action,
         status="resolved",
         updated_at=now.isoformat(),
+        idempotent_replay=False,
     )

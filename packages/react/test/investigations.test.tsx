@@ -262,4 +262,86 @@ describe('Reviewer Investigation Dashboard Components (Step C6)', () => {
     expect(currentPackApproved).toBe(true);
     expect(currentCaseStatus).toBe('IN_REVIEW');
   });
+
+  it('renders Evidence Pack Preview with structured documents, version, hash, and download actions', () => {
+    const samplePack = {
+      version: 3,
+      pack_hash: 'pack_sha256_canonical_test_hash_9999',
+      case_hash: 'case_hash_1234567890',
+      target_transaction: {
+        transaction_alias: 'TX_ALIAS_888',
+        amount: 450.0,
+        currency: 'USD',
+      },
+      attached_documents: [
+        {
+          document_id: 'doc_pod_1',
+          document_type: 'PROOF_OF_DELIVERY',
+          filename: 'fedex_pod_signed.pdf',
+          description: 'Signed delivery receipt with geostamp',
+          created_at: '2026-11-09T10:00:00Z',
+        },
+        {
+          document_id: 'doc_rec_2',
+          document_type: 'PAYMENT_RECEIPT',
+          filename: 'receipt_invoice_102.pdf',
+          description: 'Official merchant transaction invoice',
+          created_at: '2026-11-09T10:05:00Z',
+        },
+      ],
+      deterministic_findings: [
+        {
+          finding_code: 'DELIVERY_CONFIRMED',
+          severity: 'LOW',
+          description: 'Delivery matched buyer address',
+          alias_refs: ['A1'],
+        },
+      ],
+    };
+
+    const html = renderToStaticMarkup(
+      <ReturnGuardProvider client={dummyClient}>
+        <InvestigationsPage
+          initialInvestigationId="inv_case_1"
+          testDetail={sampleDetail}
+          testAssessment={sampleAssessment}
+          testPack={samplePack}
+        />
+      </ReturnGuardProvider>
+    );
+
+    // Verify Evidence Pack & Structured Preview header
+    expect(html).toContain('Evidence Package &amp; Structured Preview');
+    expect(html).toContain('v3');
+    expect(html).toContain('pack_sha256_cano');
+    expect(html).toContain('TX_ALIAS_888');
+
+    // Verify Attached Documents list
+    expect(html).toContain('Attached Documents &amp; Evidence (2)');
+    expect(html).toContain('PROOF_OF_DELIVERY');
+    expect(html).toContain('fedex_pod_signed.pdf');
+    expect(html).toContain('Signed delivery receipt with geostamp');
+    expect(html).toContain('PAYMENT_RECEIPT');
+    expect(html).toContain('receipt_invoice_102.pdf');
+
+    // Verify Download actions
+    expect(html).toContain('⬇ JSON');
+    expect(html).toContain('⬇ Markdown');
+  });
+
+  it('handles empty evidence pack gracefully without placeholder fabrication', () => {
+    const html = renderToStaticMarkup(
+      <ReturnGuardProvider client={dummyClient}>
+        <InvestigationsPage
+          initialInvestigationId="inv_case_1"
+          testDetail={{ ...sampleDetail, approval: { is_approved: false, decision: 'PENDING', pack_hash: null } }}
+          testAssessment={sampleAssessment}
+          testPack={null}
+        />
+      </ReturnGuardProvider>
+    );
+
+    expect(html).toContain('Evidence Package &amp; Structured Preview');
+    expect(html).toContain('No standalone documents attached to this evidence package.');
+  });
 });

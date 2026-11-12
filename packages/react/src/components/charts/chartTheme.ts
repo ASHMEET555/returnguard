@@ -61,13 +61,15 @@ export function calculatePercentage(value: number, total: number, decimals: numb
   return Number(pct.toFixed(decimals));
 }
 
+import { formatCurrency } from '../../utils/currency';
+
 /**
  * Formats metric values cleanly (count, percentage, currency, or decimal ratio).
  */
 export function formatMetricValue(
   value: number | undefined | null,
   format: 'count' | 'percent' | 'currency' | 'ratio' = 'count',
-  currencyCode: string = 'INR'
+  currencyCode?: string
 ): string {
   if (value === undefined || value === null || !Number.isFinite(value)) {
     return '—';
@@ -79,12 +81,7 @@ export function formatMetricValue(
     case 'ratio':
       return value.toFixed(4);
     case 'currency':
-      return new Intl.NumberFormat('en-IN', {
-        style: 'currency',
-        currency: currencyCode,
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      }).format(value);
+      return formatCurrency(value, currencyCode);
     case 'count':
     default:
       return new Intl.NumberFormat('en-US').format(Math.round(value));

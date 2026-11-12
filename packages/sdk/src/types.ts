@@ -8,6 +8,45 @@ export interface ReasonCode {
   shap_rank: number;
 }
 
+/**
+ * Line item representation for order context and risk evaluation.
+ *
+ * MONETARY INPUT CONTRACT & COMPATIBILITY BEHAVIOR:
+ * 1. Monetary decimal strings (e.g. "0.10", "1234.56", "99999999999999999.99") are the
+ *    canonical representation for unit_price and total_amount.
+ * 2. Non-integer JavaScript Numbers (e.g. 0.1, 0.1 + 0.2, 1.005) are strictly REJECTED
+ *    to prevent IEEE-754 floating-point inaccuracies from silently corrupting exact arithmetic.
+ * 3. Unsafe integer Numbers (exceeding Number.MAX_SAFE_INTEGER, NaN, Infinity) are REJECTED.
+ * 4. Validated safe integer Numbers (e.g. 100, 0) are accepted temporarily for backward compatibility.
+ * 5. Quantity accepts validated safe integer numbers (e.g. 1, 5) or decimal strings (e.g. "1", "2.5").
+ * 6. Rejected values are NEVER converted into strings to claim precision was preserved.
+ */
+export interface PaymentLineItem {
+  id?: string;
+  name?: string;
+  description?: string;
+  quantity: number | string;
+  unit_price: number | string;
+  total_amount?: number | string;
+  sku?: string;
+  currency?: string;
+}
+
+/**
+ * Structured order summary containing items and optional total.
+ *
+ * MONETARY INPUT CONTRACT:
+ * Total follows the same monetary rules: decimal strings are canonical; validated safe integers
+ * are accepted for compatibility; non-integer numbers and unsafe integers are rejected.
+ */
+export interface OrderSummary {
+  order_id?: string;
+  currency?: string;
+  total?: number | string;
+  item_count?: number;
+  items?: PaymentLineItem[];
+}
+
 export interface ScorePayload {
   order_id?: string;
   transaction_id?: string;
@@ -26,6 +65,8 @@ export interface ScorePayload {
   prior_transactions?: Array<Record<string, unknown>>;
   ring_id?: string;
   force_unavailable?: boolean;
+  line_items?: PaymentLineItem[];
+  order_summary?: OrderSummary;
 }
 
 export interface ScoreResult {
@@ -49,6 +90,9 @@ export interface ScoreResult {
   explanation_status: string;
   shadow: boolean;
   decision_id?: string | null;
+  currency?: string;
+  line_items?: PaymentLineItem[];
+  order_summary?: OrderSummary;
 }
 
 export interface DecisionListParams {
@@ -169,6 +213,56 @@ export interface AuditReconstructionData {
     summary?: string | null;
     received_at?: string | null;
   }>;
+  line_items?: PaymentLineItem[];
+  order_summary?: OrderSummary;
+}
+
+export interface EvidencePackFinding {
+  finding_code: string;
+  severity: string;
+  description: string;
+  alias_refs: string[];
+}
+
+export interface EvidencePackDocument {
+  document_id?: string;
+  document_type: string;
+  filename?: string;
+  source?: string;
+  description?: string;
+  created_at?: string;
+}
+
+export interface EvidencePackData {
+  version: number;
+  pack_hash?: string;
+  case_hash?: string;
+  dispute?: {
+    alias?: string;
+    reason_code?: string;
+    amount?: number;
+    currency?: string;
+    status?: string;
+    opened_at?: string;
+    received_at?: string;
+  };
+  target_transaction?: {
+    transaction_alias?: string;
+    amount?: number;
+    currency?: string;
+    channel?: string;
+    order_time?: string;
+    decision_record?: Record<string, unknown>;
+  };
+  deterministic_findings?: EvidencePackFinding[];
+  investigation_narrative?: {
+    summary?: string;
+    key_evidence?: string[];
+    recommended_action?: string;
+    confidence?: number;
+    [key: string]: unknown;
+  };
+  attached_documents?: EvidencePackDocument[];
 }
 
 export interface DecisionAuditReconstruction {

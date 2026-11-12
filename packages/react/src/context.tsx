@@ -29,6 +29,8 @@ export interface ReturnGuardProviderProps {
   clientOptions?: ClientOptions;
   configuration?: MerchantDashboardConfig;
   defaultTheme?: 'dark' | 'light';
+  theme?: 'dark' | 'light';
+  onThemeChange?: (theme: 'dark' | 'light') => void;
   defaultCurrency?: string;
   children: React.ReactNode;
 }
@@ -37,11 +39,28 @@ export const ReturnGuardProvider: React.FC<ReturnGuardProviderProps> = ({
   client,
   clientOptions,
   configuration,
-  defaultTheme = 'dark',
+  defaultTheme = 'light',
+  theme: propTheme,
+  onThemeChange,
   defaultCurrency = 'USD',
   children,
 }) => {
-  const [theme, setTheme] = useState<'dark' | 'light'>(defaultTheme);
+  const [internalTheme, setInternalTheme] = useState<'dark' | 'light'>(propTheme || defaultTheme);
+  const currentTheme = propTheme || internalTheme;
+
+  useEffect(() => {
+    if (propTheme) {
+      setInternalTheme(propTheme);
+    }
+  }, [propTheme]);
+
+  const handleSetTheme = (newTheme: 'dark' | 'light') => {
+    setInternalTheme(newTheme);
+    if (onThemeChange) {
+      onThemeChange(newTheme);
+    }
+  };
+
   const [currency, setCurrency] = useState<string>(configuration?.currency || defaultCurrency);
   const [dateRange, setDateRange] = useState<string>('30d');
 
@@ -52,26 +71,26 @@ export const ReturnGuardProvider: React.FC<ReturnGuardProviderProps> = ({
   }, [client, clientOptions]);
 
   useEffect(() => {
-    document.documentElement.setAttribute('data-rg-theme', theme);
-  }, [theme]);
+    document.documentElement.setAttribute('data-rg-theme', currentTheme);
+  }, [currentTheme]);
 
   const value = useMemo(
     () => ({
       client: resolvedClient,
-      theme,
-      setTheme,
+      theme: currentTheme,
+      setTheme: handleSetTheme,
       currency,
       setCurrency,
       dateRange,
       setDateRange,
       configuration,
     }),
-    [resolvedClient, theme, currency, dateRange, configuration]
+    [resolvedClient, currentTheme, currency, dateRange, configuration]
   );
 
   return (
     <ReturnGuardContext.Provider value={value}>
-      <div className={`rg-root rg-theme-${theme}`}>{children}</div>
+      <div className={`rg-root rg-theme-${currentTheme}`}>{children}</div>
     </ReturnGuardContext.Provider>
   );
 };

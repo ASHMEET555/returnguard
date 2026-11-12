@@ -8,8 +8,10 @@
 
   /* Borders & Dividers */
   --rg-border: #1f2d42;
+  --rg-border-primary: #1f2d42;
   --rg-border-subtle: #192436;
   --rg-border-active: #3b82f6;
+  --rg-shadow-card: 0 1px 3px 0 rgba(0, 0, 0, 0.25);
 
   /* Typography */
   --rg-text-primary: #f9fafb;
@@ -49,7 +51,7 @@
 
 [data-rg-theme="light"] {
   /* Surfaces */
-  --rg-bg-primary: #f8fafc;
+  --rg-bg-primary: #f8f9fa;
   --rg-bg-secondary: #ffffff;
   --rg-bg-tertiary: #f1f5f9;
   --rg-bg-card: #ffffff;
@@ -57,18 +59,20 @@
 
   /* Borders & Dividers */
   --rg-border: #e2e8f0;
+  --rg-border-primary: #e2e8f0;
   --rg-border-subtle: #edf2f7;
-  --rg-border-active: #2563eb;
+  --rg-border-active: #2b2b52;
+  --rg-shadow-card: 0 1px 3px 0 rgba(0, 0, 0, 0.06), 0 1px 2px 0 rgba(0, 0, 0, 0.04);
 
   /* Typography */
-  --rg-text-primary: #0f172a;
-  --rg-text-secondary: #475569;
-  --rg-text-muted: #64748b;
+  --rg-text-primary: #1a1f36;
+  --rg-text-secondary: #4f566b;
+  --rg-text-muted: #697386;
 
   /* Interactive / Accent */
-  --rg-accent: #2563eb;
-  --rg-accent-hover: #1d4ed8;
-  --rg-accent-subtle: rgba(37, 99, 235, 0.08);
+  --rg-accent: #2b2b52;
+  --rg-accent-hover: #303f9f;
+  --rg-accent-subtle: rgba(43, 43, 82, 0.08);
 
   /* Risk & Status Badges */
   --rg-low-bg: #ecfdf5;
@@ -99,6 +103,43 @@
 
 .rg-root * {
   box-sizing: border-box;
+}
+
+/* Cards & Containers */
+.rg-risk-summary-card {
+  background-color: var(--rg-bg-card);
+  border: 1px solid var(--rg-border);
+  border-radius: var(--rg-radius-lg);
+  padding: 20px;
+  box-shadow: var(--rg-shadow-card);
+}
+
+.rg-stat-card {
+  background-color: var(--rg-bg-secondary);
+  border: 1px solid var(--rg-border);
+  border-radius: var(--rg-radius-md);
+  padding: 16px;
+  box-shadow: var(--rg-shadow-card);
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.rg-stat-card:hover {
+  border-color: var(--rg-border-active);
+}
+
+.rg-stat-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--rg-text-secondary);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.rg-stat-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--rg-text-primary);
+  letter-spacing: -0.02em;
 }
 
 /* Badges */

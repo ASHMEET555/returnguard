@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useReturnGuard } from '../context';
+import { formatCurrency } from '../utils/currency';
 import {
   InvestigationDetail,
   InvestigationListItem,
   InvestigationTimelineStep,
   InvestigationAssessment,
+  EvidencePackData,
 } from '@returnguard/sdk';
 
 export interface InvestigationsPageProps {
@@ -15,6 +17,7 @@ export interface InvestigationsPageProps {
   testAssessment?: InvestigationAssessment | null;
   testTimeline?: InvestigationTimelineStep[] | null;
   testItems?: InvestigationListItem[] | null;
+  testPack?: EvidencePackData | any | null;
   onActionTrigger?: (action: string, payload?: any) => void;
 }
 
@@ -25,6 +28,7 @@ export const InvestigationsPage: React.FC<InvestigationsPageProps> = ({
   testAssessment,
   testTimeline,
   testItems,
+  testPack,
   onActionTrigger,
 }) => {
   const { client } = useReturnGuard();
@@ -44,6 +48,13 @@ export const InvestigationsPage: React.FC<InvestigationsPageProps> = ({
   const [timeline, setTimeline] = useState<InvestigationTimelineStep[]>(testTimeline || []);
   const [loadingDetail, setLoadingDetail] = useState<boolean>(false);
   const [detailError, setDetailError] = useState<string | null>(null);
+
+  // Evidence Pack State
+  const [evidencePack, setEvidencePack] = useState<any | null>(testPack || null);
+  const [loadingPack, setLoadingPack] = useState<boolean>(false);
+  const [packError, setPackError] = useState<string | null>(null);
+  const [downloadingFormat, setDownloadingFormat] = useState<'json' | 'md' | null>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
 
   // Modals / Action States
   const [actionError, setActionError] = useState<string | null>(null);
@@ -91,12 +102,15 @@ export const InvestigationsPage: React.FC<InvestigationsPageProps> = ({
       if (testDetail !== undefined) return;
       if (!client) return;
       setLoadingDetail(true);
+      setLoadingPack(true);
       setDetailError(null);
+      setPackError(null);
       try {
-        const [detRes, assessRes, timeRes] = await Promise.allSettled([
+        const [detRes, assessRes, timeRes, packRes] = await Promise.allSettled([
           client.investigations.get(id),
           client.investigations.getAssessment(id),
           client.investigations.getTimeline(id),
+          client.investigations.getPack(id, 'json'),
         ]);
 
         if (detRes.status === 'fulfilled') {
@@ -116,14 +130,52 @@ export const InvestigationsPage: React.FC<InvestigationsPageProps> = ({
         } else {
           setTimeline([]);
         }
+
+        if (packRes.status === 'fulfilled') {
+          setEvidencePack(packRes.value);
+        } else {
+          setEvidencePack(null);
+        }
       } catch (err: any) {
         setDetailError(err.message || 'Error fetching case data');
       } finally {
         setLoadingDetail(false);
+        setLoadingPack(false);
       }
     },
-    [client, testDetail]
+    [client, testDetail, testPack]
   );
+
+  const handleDownloadPack = async (format: 'json' | 'md' = 'json') => {
+    if (!selectedId || downloadingFormat) return;
+    setDownloadingFormat(format);
+    setDownloadError(null);
+    if (onActionTrigger) {
+      onActionTrigger('downloadPack', { id: selectedId, format });
+    }
+
+    try {
+      const data = await client.investigations.getPack(selectedId, format);
+      const content = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+      const mimeType = format === 'md' ? 'text/markdown;charset=utf-8' : 'application/json;charset=utf-8';
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const ver = evidencePack?.version || detail?.approval?.pack_hash?.substring(0, 8) || '1';
+      link.download = `evidence_pack_${selectedId}_v${ver}.${format}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      setActionSuccess(`Evidence pack downloaded successfully as ${format.toUpperCase()}.`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to download evidence pack';
+      setDownloadError(msg);
+    } finally {
+      setDownloadingFormat(null);
+    }
+  };
 
   useEffect(() => {
     if (selectedId) {
@@ -603,7 +655,7 @@ export const InvestigationsPage: React.FC<InvestigationsPageProps> = ({
             <div style={{ textAlign: 'right' }}>
               <div style={{ fontSize: 11, color: 'var(--rg-text-muted)' }}>Dispute Amount</div>
               <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--rg-text-primary)' }}>
-                {detail?.currency || 'USD'} {Number(detail?.amount || 0).toFixed(2)}
+                {formatCurrency(detail?.amount, detail?.currency)}
               </div>
             </div>
           </div>
@@ -1172,26 +1224,170 @@ export const InvestigationsPage: React.FC<InvestigationsPageProps> = ({
                 </div>
               </div>
 
-              {/* Pack Status Card */}
+              {/* Evidence Package Preview & Download Card */}
               <div className="rg-card" style={{ padding: 16 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                  <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700 }}>Evidence Package Status</h3>
-                  <span
-                    style={{
-                      fontSize: 12,
-                      fontWeight: 700,
-                      color: isApprovedPack ? 'var(--rg-low-text)' : 'var(--rg-med-text)',
-                    }}
-                  >
-                    ● {detail?.approval?.decision || 'DRAFT / PENDING'}
-                  </span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700 }}>Evidence Package &amp; Structured Preview</h3>
+                    <div style={{ fontSize: 12, color: 'var(--rg-text-muted)', marginTop: 2 }}>
+                      Canonical evidence bundle compiled for dispute resolution and review.
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 700,
+                        color: isApprovedPack ? 'var(--rg-low-text)' : 'var(--rg-med-text)',
+                        background: isApprovedPack ? 'var(--rg-low-bg)' : 'var(--rg-med-bg)',
+                        padding: '3px 8px',
+                        borderRadius: 4,
+                      }}
+                    >
+                      ● {detail?.approval?.decision || (evidencePack ? 'COMPILED' : 'DRAFT / PENDING')}
+                    </span>
+                    <button
+                      type="button"
+                      className="rg-btn-secondary"
+                      style={{ fontSize: 11, padding: '4px 8px', cursor: downloadingFormat ? 'not-allowed' : 'pointer' }}
+                      disabled={Boolean(downloadingFormat) || (!evidencePack && !detail?.approval?.pack_hash)}
+                      onClick={() => handleDownloadPack('json')}
+                      title="Download canonical evidence pack in JSON format"
+                    >
+                      {downloadingFormat === 'json' ? 'Downloading...' : '⬇ JSON'}
+                    </button>
+                    <button
+                      type="button"
+                      className="rg-btn-secondary"
+                      style={{ fontSize: 11, padding: '4px 8px', cursor: downloadingFormat ? 'not-allowed' : 'pointer' }}
+                      disabled={Boolean(downloadingFormat) || (!evidencePack && !detail?.approval?.pack_hash)}
+                      onClick={() => handleDownloadPack('md')}
+                      title="Download canonical evidence pack in Markdown format"
+                    >
+                      {downloadingFormat === 'md' ? 'Downloading...' : '⬇ Markdown'}
+                    </button>
+                  </div>
                 </div>
-                <div style={{ fontSize: 12, color: 'var(--rg-text-secondary)', marginBottom: 8 }}>
-                  Pack Hash: <code style={{ fontFamily: 'monospace' }}>{currentPackHash}</code>
+
+                {downloadError && (
+                  <div className="rg-alert-error" style={{ fontSize: 12, padding: '6px 10px', marginBottom: 8 }}>
+                    {downloadError}
+                  </div>
+                )}
+
+                {loadingPack && (
+                  <div style={{ fontSize: 12, color: 'var(--rg-text-muted)', padding: '12px 0' }}>
+                    <span className="rg-loading-spinner" aria-hidden="true" style={{ display: 'inline-block', marginRight: 6 }} />
+                    Loading evidence pack preview...
+                  </div>
+                )}
+
+                {packError && (
+                  <div style={{ fontSize: 12, color: 'var(--rg-high-text)', background: 'var(--rg-high-bg)', padding: 8, borderRadius: 4, marginBottom: 8 }}>
+                    Failed to load evidence pack: {packError}
+                  </div>
+                )}
+
+                {/* Metadata Strip */}
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                    gap: 8,
+                    background: 'var(--rg-bg-secondary)',
+                    padding: 10,
+                    borderRadius: 6,
+                    border: '1px solid var(--rg-border)',
+                    marginBottom: 12,
+                    fontSize: 11,
+                  }}
+                >
+                  <div>
+                    <span style={{ color: 'var(--rg-text-muted)' }}>Pack Version: </span>
+                    <strong style={{ color: 'var(--rg-text)' }}>v{evidencePack?.version || (detail?.approval?.pack_hash ? '1' : '--')}</strong>
+                  </div>
+                  <div>
+                    <span style={{ color: 'var(--rg-text-muted)' }}>Pack Hash: </span>
+                    <code style={{ fontFamily: 'monospace', color: 'var(--rg-text)' }}>
+                      {(evidencePack?.pack_hash || currentPackHash || '--').substring(0, 16)}...
+                    </code>
+                  </div>
+                  <div>
+                    <span style={{ color: 'var(--rg-text-muted)' }}>Transaction: </span>
+                    <span style={{ color: 'var(--rg-text)', fontFamily: 'monospace' }}>
+                      {evidencePack?.target_transaction?.transaction_alias || detail?.transaction_id || '--'}
+                    </span>
+                  </div>
+                  <div>
+                    <span style={{ color: 'var(--rg-text-muted)' }}>Dispute: </span>
+                    <strong style={{ color: 'var(--rg-text)' }}>
+                      {formatCurrency(detail?.amount, detail?.currency)}
+                    </strong>
+                  </div>
                 </div>
+
+                {/* Evidence Attached Documents */}
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--rg-text)', marginBottom: 6 }}>
+                    Attached Documents &amp; Evidence ({evidencePack?.attached_documents?.length || 0})
+                  </div>
+                  {evidencePack?.attached_documents && evidencePack.attached_documents.length > 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {evidencePack.attached_documents.map((doc: any, dIdx: number) => (
+                        <div
+                          key={doc.document_id || dIdx}
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            padding: '6px 10px',
+                            background: 'var(--rg-bg-secondary)',
+                            border: '1px solid var(--rg-border)',
+                            borderRadius: 4,
+                            fontSize: 11,
+                          }}
+                        >
+                          <div>
+                            <span
+                              style={{
+                                fontWeight: 700,
+                                background: 'var(--rg-bg-tertiary)',
+                                padding: '2px 6px',
+                                borderRadius: 3,
+                                marginRight: 6,
+                                color: 'var(--rg-text-secondary)',
+                              }}
+                            >
+                              {doc.document_type || 'DOCUMENT'}
+                            </span>
+                            <span style={{ color: 'var(--rg-text)', fontWeight: 600 }}>
+                              {doc.filename || doc.source || `Document #${dIdx + 1}`}
+                            </span>
+                            {doc.description && (
+                              <span style={{ color: 'var(--rg-text-muted)', marginLeft: 8 }}>
+                                — {doc.description}
+                              </span>
+                            )}
+                          </div>
+                          {doc.created_at && (
+                            <span style={{ color: 'var(--rg-text-muted)' }}>
+                              {new Date(doc.created_at).toLocaleDateString()}
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 11, color: 'var(--rg-text-muted)', fontStyle: 'italic' }}>
+                      {loadingPack ? 'Loading documents...' : 'No standalone documents attached to this evidence package.'}
+                    </div>
+                  )}
+                </div>
+
+                {/* Approval details if present */}
                 {detail?.approval?.approver_sub && (
-                  <div style={{ fontSize: 12, color: 'var(--rg-text-muted)' }}>
-                    Approved by: <span style={{ fontWeight: 600 }}>{detail.approval.approver_sub}</span> at{' '}
+                  <div style={{ fontSize: 11, color: 'var(--rg-text-muted)', borderTop: '1px solid var(--rg-border-subtle)', paddingTop: 8 }}>
+                    Approved by: <span style={{ fontWeight: 600, color: 'var(--rg-text)' }}>{detail.approval.approver_sub}</span> at{' '}
                     {detail.approval.decided_at ? new Date(detail.approval.decided_at).toLocaleString() : ''}
                   </div>
                 )}

@@ -1,5 +1,6 @@
 import React from 'react';
 import type { Severity } from '../lib/types';
+import styles from './RiskBadge.module.css';
 
 interface RiskBadgeProps {
   severity: Severity;
@@ -7,21 +8,13 @@ interface RiskBadgeProps {
 }
 
 export const RiskBadge: React.FC<RiskBadgeProps> = ({ severity, score }) => {
-  const label = score !== undefined ? `${severity} (${score.toFixed(2)})` : severity;
-
   return (
-    <span
-      data-severity={severity}
-      style={{
-        display: 'inline-block',
-        padding: '2px 8px',
-        borderRadius: '4px',
-        fontWeight: 'bold',
-        textTransform: 'uppercase',
-        fontSize: '12px',
-      }}
-    >
-      {label}
+    <span className={styles.badge} data-severity={severity}>
+      <span className={styles.dot} aria-hidden="true" />
+      <span>{severity}</span>
+      {score !== undefined && (
+        <span className={styles.score}>({score.toFixed(2)})</span>
+      )}
     </span>
   );
 };

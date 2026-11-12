@@ -89,4 +89,32 @@ describe("Investigation Resource Methods in SDK", () => {
     expect(assessment.final_status).toBe("VALIDATED");
     expect(assessment.attempt_count).toBe(1);
   });
+
+  it("investigations.getPack retrieves canonical evidence package", async () => {
+    let capturedUrl = "";
+    const fakeFetch = vi.fn().mockImplementation(async (url: string) => {
+      capturedUrl = url;
+      return new Response(
+        JSON.stringify({
+          version: 2,
+          pack_hash: "hash_pack_123",
+          deterministic_findings: [{ finding_code: "F1", severity: "HIGH", description: "Mismatched device", alias_refs: [] }],
+          attached_documents: [{ document_type: "RECEIPT", filename: "receipt.pdf" }],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    });
+
+    const client = new ReturnGuardClient({
+      baseUrl: "https://api.test",
+      apiKey: "rg_live_test",
+      fetch: fakeFetch as any,
+    });
+
+    const pack = (await client.investigations.getPack("inv_100", "json")) as any;
+    expect(capturedUrl).toContain("/v1/investigations/inv_100/pack?format=json");
+    expect(pack.version).toBe(2);
+    expect(pack.pack_hash).toBe("hash_pack_123");
+    expect(pack.deterministic_findings).toHaveLength(1);
+  });
 });
