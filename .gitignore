@@ -57,3 +57,7 @@ Thumbs.db
 *.swo
 merchantshield-ai/
 test-results/
+
+# SQLite WAL/SHM runtime files
+*.db-shm
+*.db-wal
