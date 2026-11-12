@@ -1,0 +1,239 @@
+/* Shared Landing Page CSS Module */
+
+.section {
+  padding: 80px 0;
+  position: relative;
+}
+
+.container {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+.sectionHeader {
+  text-align: center;
+  max-width: 760px;
+  margin: 0 auto 56px auto;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 5px 14px;
+  border-radius: var(--rg-radius-pill);
+  background: var(--rg-mkt-pill-bg);
+  color: var(--rg-mkt-pill-text);
+  border: 1px solid var(--rg-mkt-pill-border);
+  margin-bottom: 16px;
+}
+
+.pillDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--rg-accent-blue);
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.6);
+}
+
+.title {
+  font-size: clamp(32px, 5vw, 54px);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--rg-mkt-text-head);
+  line-height: 1.15;
+  margin-bottom: 20px;
+}
+
+.titleGradient {
+  background: var(--rg-accent-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.subtitle {
+  font-size: clamp(16px, 1.8vw, 19px);
+  color: var(--rg-mkt-text-body);
+  line-height: 1.6;
+  max-width: 680px;
+  margin: 0 auto 36px auto;
+}
+
+/* Button & Action Styles */
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 48px;
+}
+
+.primaryBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 26px;
+  font-size: 15px;
+  font-weight: 600;
+  border-radius: var(--rg-radius-md);
+  background: var(--rg-accent-gradient);
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(59, 130, 246, 0.35);
+  transition: all 0.2s ease;
+  min-height: 46px;
+  text-decoration: none;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.primaryBtn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.5);
+}
+
+.secondaryBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 22px;
+  font-size: 15px;
+  font-weight: 600;
+  border-radius: var(--rg-radius-md);
+  background: var(--rg-mkt-card);
+  color: var(--rg-mkt-text-head);
+  border: 1px solid var(--rg-mkt-border);
+  box-shadow: var(--rg-shadow-sm);
+  min-height: 46px;
+  transition: all 0.2s ease;
+  text-decoration: none;
+}
+
+.secondaryBtn:hover {
+  background: var(--rg-mkt-card-hover);
+  border-color: var(--rg-mkt-border-hover);
+  transform: translateY(-1px);
+}
+
+/* Responsive Grid Systems */
+.grid3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+}
+
+.grid2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24px;
+}
+
+.grid4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+}
+
+@media (max-width: 1024px) {
+  .grid3 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .grid4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .grid3,
+  .grid2,
+  .grid4 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Card Surfaces */
+.card {
+  background: var(--rg-mkt-card);
+  border: 1px solid var(--rg-mkt-border);
+  border-radius: var(--rg-radius-lg);
+  padding: 28px;
+  box-shadow: var(--rg-shadow-md);
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.card:hover {
+  background: var(--rg-mkt-card-hover);
+  border-color: var(--rg-mkt-border-hover);
+  transform: translateY(-2px);
+  box-shadow: var(--rg-shadow-lg);
+}
+
+.cardIcon {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--rg-radius-md);
+  background: rgba(59, 130, 246, 0.1);
+  color: #60a5fa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20px;
+  border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+.cardTitle {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--rg-mkt-text-head);
+  margin-bottom: 10px;
+  letter-spacing: -0.01em;
+}
+
+.cardDesc {
+  font-size: 14.5px;
+  color: var(--rg-mkt-text-body);
+  line-height: 1.6;
+}
+
+/* Stat & Metric Counters */
+.statCard {
+  background: var(--rg-mkt-card);
+  border: 1px solid var(--rg-mkt-border);
+  border-radius: var(--rg-radius-lg);
+  padding: 24px;
+  text-align: center;
+}
+
+.statValue {
+  font-size: clamp(28px, 4vw, 42px);
+  font-weight: 800;
+  color: var(--rg-mkt-text-head);
+  font-family: var(--rg-font-mono);
+  letter-spacing: -0.02em;
+  margin-bottom: 8px;
+}
+
+.statLabel {
+  font-size: 13.5px;
+  color: var(--rg-mkt-text-body);
+  font-weight: 500;
+}
+
+/* Code Snippet Box */
+.codeCard {
+  background: #060911;
+  border: 1px solid var(--rg-mkt-border);
+  border-radius: var(--rg-radius-lg);
+  padding: 20px;
+  font-family: var(--rg-font-mono);
+  font-size: 13px;
+  color: #e2e8f0;
+  overflow-x: auto;
+  line-height: 1.6;
+}

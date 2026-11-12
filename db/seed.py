@@ -17,7 +17,9 @@ from db.models import (
     Merchant,
     Order,
     Payment,
+    User,
 )
+from auth.user_auth import hash_password
 from db.session import SessionLocal, init_db
 
 logger = logging.getLogger("returnguard.db.seed")
@@ -49,8 +51,38 @@ def _filter_fields(model_cls, raw_dict: dict) -> dict:
 
 
 def seed_default_data(db: Session) -> bool:
-    """Seed default ShopPoint dataset if database has no decisions for merch_shoppoint."""
+    """Seed default ShopPoint dataset and default admin user if not present."""
     try:
+        # Seed default administrative SaaS user if none exists
+        admin_email = "admin@shoppoint.com"
+        existing_user = db.query(User).filter(User.email == admin_email).first()
+        if not existing_user:
+            # Ensure merch_shoppoint exists
+            shoppoint_merch = db.query(Merchant).filter(Merchant.id == "merch_shoppoint").first()
+            if not shoppoint_merch:
+                shoppoint_merch = Merchant(
+                    id="merch_shoppoint",
+                    name="ShopPoint Retail",
+                    email="admin@shoppoint.com",
+                    created_at=datetime.datetime.now(datetime.timezone.utc),
+                )
+                db.add(shoppoint_merch)
+                db.flush()
+
+            demo_user = User(
+                id="usr_shoppoint_admin",
+                merchant_id="merch_shoppoint",
+                email=admin_email,
+                password_hash=hash_password("Admin12345!"),
+                full_name="ShopPoint Administrator",
+                role="admin",
+                is_active=True,
+                created_at=datetime.datetime.now(datetime.timezone.utc),
+            )
+            db.add(demo_user)
+            db.commit()
+            logger.info("Default demo SaaS user seeded: %s", admin_email)
+
         # Check if audit events already exist
         existing_count = (
             db.query(AuditScoreEvent)
@@ -93,6 +125,25 @@ def seed_default_data(db: Session) -> bool:
             db.commit()
 
         logger.info("Default ShopPoint dataset seeded successfully!")
+
+        # Seed default administrative SaaS user if none exists
+        admin_email = "admin@shoppoint.com"
+        existing_user = db.query(User).filter(User.email == admin_email).first()
+        if not existing_user:
+            demo_user = User(
+                id="usr_shoppoint_admin",
+                merchant_id="merch_shoppoint",
+                email=admin_email,
+                password_hash=hash_password("Admin12345!"),
+                full_name="ShopPoint Administrator",
+                role="admin",
+                is_active=True,
+                created_at=datetime.datetime.now(datetime.timezone.utc),
+            )
+            db.add(demo_user)
+            db.commit()
+            logger.info("Default demo SaaS user seeded: %s", admin_email)
+
         return True
     except Exception as e:
         db.rollback()

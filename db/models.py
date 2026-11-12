@@ -145,6 +145,11 @@ class Payment(Base):
     """Payment record linked to an order."""
 
     __tablename__ = "payments"
+    __table_args__ = (
+        UniqueConstraint(
+            "merchant_id", "capture_id", name="uq_payments_merchant_capture"
+        ),
+    )
 
     id = Column(String(64), primary_key=True)
     order_id = Column(String(64), ForeignKey("orders.id"), nullable=False)
@@ -153,6 +158,7 @@ class Payment(Base):
     )
     channel = Column(String(32), nullable=False)
     amount = Column(Numeric(12, 2), nullable=False)
+    refunded_amount = Column(Numeric(12, 2), default=0.0, nullable=False)
     currency = Column(String(3), default="INR", nullable=False)
     status = Column(
         String(32), nullable=False
@@ -222,16 +228,28 @@ class Refund(Base):
     """Refund transaction record."""
 
     __tablename__ = "refunds"
+    __table_args__ = (
+        UniqueConstraint(
+            "merchant_id",
+            "paypal_refund_id",
+            name="uq_refunds_merchant_paypal_id",
+        ),
+    )
 
     id = Column(String(64), primary_key=True)
     merchant_id = Column(
-        String(64), ForeignKey("merchants.id"), nullable=True, index=True
+        String(64), ForeignKey("merchants.id"), nullable=False, index=True
     )
-    payment_id = Column(String(64), ForeignKey("payments.id"), nullable=False)
+    payment_id = Column(String(64), ForeignKey("payments.id"), nullable=True, index=True)
+    order_id = Column(String(64), ForeignKey("orders.id"), nullable=True, index=True)
     amount = Column(Numeric(12, 2), nullable=False)
     currency = Column(String(3), default="INR", nullable=False)
-    status = Column(String(32), nullable=False)  # 'pending', 'completed', 'failed'
+    status = Column(
+        String(32), nullable=False
+    )  # 'PENDING_CAPTURE_LINK', 'RECONCILED', 'RECONCILIATION_ERROR', 'pending', 'completed', 'failed'
+    error_reason = Column(String(255), nullable=True)
     paypal_refund_id = Column(String(128), nullable=True, index=True)
+    reconciled_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(
         DateTime(timezone=True),
         default=lambda: datetime.datetime.now(datetime.UTC),
@@ -609,6 +627,8 @@ class MerchantAudit(Base):
     action = Column(String(64), nullable=False)
     entity_type = Column(String(64), nullable=False)
     entity_id = Column(String(64), nullable=False)
+    operation_id = Column(String(128), nullable=True, index=True)
+    event_id = Column(String(128), nullable=True, index=True)
     actor = Column(String(64), nullable=False)  # merchant user or system/assistant
     details_json = Column(Text, nullable=True)
     created_at = Column(
@@ -669,6 +689,7 @@ class AuditScoreEvent(Base):
     reason_codes_json = Column(Text, nullable=True)
     rule_hits_json = Column(Text, nullable=True)
     feature_snapshot_json = Column(Text, nullable=True)
+    order_summary_json = Column(Text, nullable=True)
     ring_id = Column(String(64), nullable=True)
     shadow = Column(Integer, default=1, nullable=False)
     created_at = Column(
@@ -678,3 +699,67 @@ class AuditScoreEvent(Base):
     )
 
     order = relationship("Order")
+
+
+class User(Base):
+    """SaaS User Account."""
+
+    __tablename__ = "users"
+
+    id = Column(String(64), primary_key=True)
+    merchant_id = Column(
+        String(64), ForeignKey("merchants.id"), nullable=False, index=True
+    )
+    email = Column(String(255), unique=True, nullable=False, index=True)
+    password_hash = Column(String(255), nullable=False)
+    full_name = Column(String(255), nullable=False)
+    role = Column(String(32), default="admin", nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.UTC),
+        nullable=False,
+    )
+
+    merchant = relationship("Merchant", backref="users")
+
+
+class UserSession(Base):
+    """Active server-side SaaS user sessions."""
+
+    __tablename__ = "user_sessions"
+
+    id = Column(String(64), primary_key=True)
+    user_id = Column(String(64), ForeignKey("users.id"), nullable=False, index=True)
+    merchant_id = Column(
+        String(64), ForeignKey("merchants.id"), nullable=False, index=True
+    )
+    expires_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.UTC),
+        nullable=False,
+    )
+
+    user = relationship("User")
+    merchant = relationship("Merchant")
+
+
+class SecurityAuditLog(Base):
+    """Immutable audit journal for authentication and credential lifecycle."""
+
+    __tablename__ = "security_audit_logs"
+
+    id = Column(String(64), primary_key=True)
+    event_type = Column(String(64), nullable=False, index=True)
+    actor_id = Column(String(64), nullable=True)
+    merchant_id = Column(String(64), nullable=False, index=True)
+    target_resource = Column(String(64), nullable=True)
+    ip_address = Column(String(64), nullable=True)
+    outcome = Column(String(32), nullable=False)
+    details_json = Column(Text, nullable=True)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.UTC),
+        nullable=False,
+    )

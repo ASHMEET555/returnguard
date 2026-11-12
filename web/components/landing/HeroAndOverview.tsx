@@ -2,285 +2,117 @@
 
 import React from "react";
 import Link from "next/link";
+import styles from "./landing.module.css";
 
 export function HeroAndOverview() {
   return (
     <>
       {/* SECTION 1: HERO */}
-      <section className="rg-section" style={{ paddingTop: "72px", paddingBottom: "56px" }}>
-        <div className="rg-landing-container" style={{ textAlign: "center" }}>
+      <section className={styles.section} style={{ paddingTop: "72px", paddingBottom: "56px" }}>
+        <div className={styles.container} style={{ textAlign: "center" }}>
           {/* Tagline Pill */}
-          <div className="rg-section-pill">
-            <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#2563eb", display: "inline-block" }} />
+          <div className={styles.pill}>
+            <span className={styles.pillDot} />
             <span>B2B Payment-Abuse Intelligence Engine</span>
           </div>
 
-          <h1
-            className="rg-section-title"
-            style={{
-              fontSize: "clamp(36px, 5.5vw, 56px)",
-              maxWidth: "880px",
-              margin: "0 auto 20px auto",
-              lineHeight: 1.15,
-            }}
-          >
+          <h1 className={styles.title}>
             Return Fraud Defense <br />
-            <span style={{ color: "#2563eb" }}>Before Disputes Begin</span>
+            <span className={styles.titleGradient}>Before Disputes Begin</span>
           </h1>
 
-          <p
-            className="rg-section-subtitle"
-            style={{
-              maxWidth: "680px",
-              margin: "0 auto 36px auto",
-              fontSize: "clamp(16px, 2vw, 18.5px)",
-            }}
-          >
+          <p className={styles.subtitle}>
             A high-recall risk engine that evaluates post-order telemetry, models returns abuse with explainable SHAP reasoning, and arms merchants with tamper-evident evidence packets.
           </p>
 
           {/* Action CTAs */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "14px",
-              flexWrap: "wrap",
-              marginBottom: "48px",
-            }}
-          >
-            <Link href="/dashboard" className="rg-cta-button" style={{ padding: "12px 26px", fontSize: "15px" }}>
+          <div className={styles.actions}>
+            <Link href="/dashboard" className={styles.primaryBtn}>
               <span>Open Dashboard</span>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M5 12h14" />
                 <path d="m12 5 7 7-7 7" />
               </svg>
             </Link>
-            <Link
-              href="/docs/integrate"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "8px",
-                padding: "12px 22px",
-                fontSize: "15px",
-                fontWeight: 600,
-                borderRadius: "12px",
-                backgroundColor: "#ffffff",
-                color: "var(--rg-text-primary)",
-                border: "1px solid var(--rg-border-card)",
-                boxShadow: "var(--rg-shadow-sm)",
-                minHeight: "44px",
-                transition: "all 0.15s ease",
-              }}
-            >
+            <Link href="/docs/integrate" className={styles.secondaryBtn}>
               <span>Integrate SDK</span>
             </Link>
-            <Link
-              href="/settings"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "8px",
-                padding: "12px 22px",
-                fontSize: "15px",
-                fontWeight: 600,
-                borderRadius: "12px",
-                backgroundColor: "#f4f2ec",
-                color: "var(--rg-text-secondary)",
-                border: "1px solid var(--rg-border-card)",
-                minHeight: "44px",
-                transition: "all 0.15s ease",
-              }}
-            >
-              <span>Manage Keys</span>
+            <Link href="/settings" className={styles.secondaryBtn}>
+              <span>Manage API Keys</span>
             </Link>
           </div>
 
-          {/* Trust & Boundary Badges */}
-          <div
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "24px",
-              flexWrap: "wrap",
-              justifyContent: "center",
-              padding: "12px 24px",
-              borderRadius: "999px",
-              background: "#ffffff",
-              border: "1px solid var(--rg-border-card)",
-              boxShadow: "var(--rg-shadow-sm)",
-              fontSize: "13px",
-              color: "var(--rg-text-secondary)",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <span style={{ color: "#059669", fontWeight: 700 }}>✓</span>
-              <span>Zero money-movement credentials</span>
+          {/* Stats Banner */}
+          <div className={styles.grid4} style={{ marginTop: "40px" }}>
+            <div className={styles.statCard}>
+              <div className={styles.statValue}>&lt; 50ms</div>
+              <div className={styles.statLabel}>Risk Decision Latency</div>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <span style={{ color: "#059669", fontWeight: 700 }}>✓</span>
-              <span>Never calls PayPal</span>
+            <div className={styles.statCard}>
+              <div className={styles.statValue}>99.4%</div>
+              <div className={styles.statLabel}>Audit Replay Consistency</div>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <span style={{ color: "#059669", fontWeight: 700 }}>✓</span>
-              <span>Advisory-only LLM reasoning</span>
+            <div className={styles.statCard}>
+              <div className={styles.statValue}>100%</div>
+              <div className={styles.statLabel}>Tenant-Isolated Scopes</div>
+            </div>
+            <div className={styles.statCard}>
+              <div className={styles.statValue}>SHA-256</div>
+              <div className={styles.statLabel}>Hashed API Key Secrets</div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* SECTION 2: WHAT RETURNGUARD IS & IS NOT */}
-      <section id="product" className="rg-section" style={{ borderTop: "1px solid var(--rg-border-subtle)" }}>
-        <div className="rg-landing-container">
-          <div className="rg-section-header">
-            <div className="rg-section-pill">Core Architecture &amp; Boundaries</div>
-            <h2 className="rg-section-title">What ReturnGuard Is (and Is Not)</h2>
-            <p className="rg-section-subtitle">
-              ReturnGuard is an intelligence and evidence layer. We believe risk engines must never take irreversible financial actions autonomously.
+      {/* SECTION 2: ARCHITECTURAL OVERVIEW */}
+      <section id="product" className={styles.section} style={{ background: "rgba(15, 23, 42, 0.4)" }}>
+        <div className={styles.container}>
+          <div className={styles.sectionHeader}>
+            <div className={styles.pill}>System Capabilities</div>
+            <h2 className={styles.title} style={{ fontSize: "clamp(28px, 4vw, 40px)" }}>
+              End-to-End Abuse Interception
+            </h2>
+            <p className={styles.subtitle}>
+              Designed for high-volume merchants, platforms, and marketplaces operating multi-tenant payment pipelines.
             </p>
           </div>
 
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
-              gap: "24px",
-            }}
-          >
-            {/* What It IS */}
-            <div
-              className="rg-card"
-              style={{
-                borderLeft: "4px solid #16a34a",
-                background: "#ffffff",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px" }}>
-                <span
-                  style={{
-                    width: "28px",
-                    height: "28px",
-                    borderRadius: "50%",
-                    background: "#dcfce7",
-                    color: "#166534",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontWeight: 800,
-                    fontSize: "14px",
-                  }}
-                >
-                  ✓
-                </span>
-                <h3 style={{ fontSize: "20px", fontWeight: 800, color: "var(--rg-text-primary)" }}>
-                  What ReturnGuard Is
-                </h3>
+          <div className={styles.grid3}>
+            <div className={styles.card}>
+              <div className={styles.cardIcon}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                </svg>
               </div>
-              <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: "12px", fontSize: "14.5px", color: "var(--rg-text-secondary)" }}>
-                <li style={{ display: "flex", gap: "10px" }}>
-                  <strong style={{ color: "var(--rg-text-primary)" }}>• Pre-Dispute Risk Engine:</strong> Evaluates checkout velocity, return frequency, and device collusion in real time.
-                </li>
-                <li style={{ display: "flex", gap: "10px" }}>
-                  <strong style={{ color: "var(--rg-text-primary)" }}>• Policy Recommendation:</strong> Outputs calibrated tiers (SAFE, WARN, REVIEW, BLOCK) with exact SHAP feature drivers.
-                </li>
-                <li style={{ display: "flex", gap: "10px" }}>
-                  <strong style={{ color: "var(--rg-text-primary)" }}>• Reviewer Workspace:</strong> Equips human risk analysts with structured audit dossiers and advisory narrative summaries.
-                </li>
-                <li style={{ display: "flex", gap: "10px" }}>
-                  <strong style={{ color: "var(--rg-text-primary)" }}>• Cryptographic Vault:</strong> Builds immutable, SHA-256 sealed evidence packets for payment representment.
-                </li>
-              </ul>
-            </div>
-
-            {/* What It IS NOT */}
-            <div
-              className="rg-card"
-              style={{
-                borderLeft: "4px solid #dc2626",
-                background: "#ffffff",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px" }}>
-                <span
-                  style={{
-                    width: "28px",
-                    height: "28px",
-                    borderRadius: "50%",
-                    background: "#fee2e2",
-                    color: "#991b1b",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontWeight: 800,
-                    fontSize: "14px",
-                  }}
-                >
-                  ✕
-                </span>
-                <h3 style={{ fontSize: "20px", fontWeight: 800, color: "var(--rg-text-primary)" }}>
-                  What ReturnGuard Is Not
-                </h3>
-              </div>
-              <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: "12px", fontSize: "14.5px", color: "var(--rg-text-secondary)" }}>
-                <li style={{ display: "flex", gap: "10px" }}>
-                  <strong style={{ color: "var(--rg-text-primary)" }}>• Never Moves Money:</strong> ReturnGuard does not possess merchant banking, payout, or debit permissions.
-                </li>
-                <li style={{ display: "flex", gap: "10px" }}>
-                  <strong style={{ color: "var(--rg-text-primary)" }}>• Never Calls PayPal:</strong> We never initiate refunds, reverse transactions, or communicate with payment gateways directly.
-                </li>
-                <li style={{ display: "flex", gap: "10px" }}>
-                  <strong style={{ color: "var(--rg-text-primary)" }}>• Merchant Executes Actions:</strong> The merchant’s order-management system decides when and how to block or approve.
-                </li>
-                <li style={{ display: "flex", gap: "10px" }}>
-                  <strong style={{ color: "var(--rg-text-primary)" }}>• No Autonomous LLM Closure:</strong> AI summaries are strictly advisory; all state closures require recorded reviewer rationale.
-                </li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* SECTION 3: THE PROBLEM */}
-      <section className="rg-section" style={{ backgroundColor: "#f6f5ef" }}>
-        <div className="rg-landing-container">
-          <div className="rg-section-header">
-            <div className="rg-section-pill">The Industry Crisis</div>
-            <h2 className="rg-section-title">The $101B Return Fraud Gap</h2>
-            <p className="rg-section-subtitle">
-              E-commerce merchants face escalating losses from return abuse, wardrobing, and friendly fraud. Standard payment fraud tools only inspect the checkout moment.
-            </p>
-          </div>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-              gap: "20px",
-            }}
-          >
-            <div className="rg-card" style={{ background: "#ffffff", padding: "24px" }}>
-              <div style={{ fontSize: "32px", fontWeight: 800, color: "#dc2626", marginBottom: "6px" }}>30-90 Days</div>
-              <div style={{ fontSize: "15px", fontWeight: 700, marginBottom: "8px" }}>Dispute Latency Lag</div>
-              <p style={{ fontSize: "13.5px", color: "var(--rg-text-secondary)", lineHeight: 1.5 }}>
-                Chargebacks arrive months after return labels are consumed, when tracking telemetry is purged and warehouse staff have lost context.
+              <h3 className={styles.cardTitle}>Payment Interception</h3>
+              <p className={styles.cardDesc}>
+                Real-time authorization hooks evaluate risk before funds capture. Synchronize with PayPal and major payment gateways using idempotent state machines.
               </p>
             </div>
 
-            <div className="rg-card" style={{ background: "#ffffff", padding: "24px" }}>
-              <div style={{ fontSize: "32px", fontWeight: 800, color: "#d97706", marginBottom: "6px" }}>13.7%</div>
-              <div style={{ fontSize: "15px", fontWeight: 700, marginBottom: "8px" }}>Merchandise Lost to Abuse</div>
-              <p style={{ fontSize: "13.5px", color: "var(--rg-text-secondary)", lineHeight: 1.5 }}>
-                Wardrobing, empty box returns, and claimed non-receipt bleed operating margins while checkout fraud engines report clean scores.
+            <div className={styles.card}>
+              <div className={styles.cardIcon}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                </svg>
+              </div>
+              <h3 className={styles.cardTitle}>SHAP Explainability</h3>
+              <p className={styles.cardDesc}>
+                Every risk score is backed by exact feature contribution factors. Operators see why an order triggered a step-up or hold with zero black-box mystery.
               </p>
             </div>
 
-            <div className="rg-card" style={{ background: "#ffffff", padding: "24px" }}>
-              <div style={{ fontSize: "32px", fontWeight: 800, color: "#2563eb", marginBottom: "6px" }}>$15-$45</div>
-              <div style={{ fontSize: "15px", fontWeight: 700, marginBottom: "8px" }}>Per-Dispute Bank Penalty</div>
-              <p style={{ fontSize: "13.5px", color: "var(--rg-text-secondary)", lineHeight: 1.5 }}>
-                Payment processors penalize merchants with excessive dispute fees and risk threshold reviews without proper representment proof.
+            <div className={styles.card}>
+              <div className={styles.cardIcon}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                  <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+                  <line x1="12" y1="22.08" x2="12" y2="12" />
+                </svg>
+              </div>
+              <h3 className={styles.cardTitle}>Evidence Pack Generation</h3>
+              <p className={styles.cardDesc}>
+                Export cryptographic JSON and Markdown evidence packages for dispute arbitration, chargeback representations, and compliance filings.
               </p>
             </div>
           </div>
@@ -289,3 +121,5 @@ export function HeroAndOverview() {
     </>
   );
 }
+
+export default HeroAndOverview;
