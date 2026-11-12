@@ -11,10 +11,12 @@ from api.routes import (
     admin,
     analytics,
     assistant,
+    auth_users,
     customers,
     disputes,
     events,
     investigations,
+    merchant_keys,
     models,
     payments,
     reviews,
@@ -78,6 +80,8 @@ else:
 
 # Wire auth routes
 app.include_router(auth_router)
+app.include_router(auth_users.router)
+app.include_router(merchant_keys.router)
 
 # Wire feature routers
 app.include_router(score.router)

@@ -1,20 +1,16 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import Link from "next/link";
 import { Navbar } from "../../components/Navbar";
-
-interface Merchant {
-  id: string;
-  name: string;
-  email: string;
-  created_at: string;
-}
+import { ProtectedRoute } from "../../components/ProtectedRoute";
+import { useAuth } from "../../lib/authContext";
+import styles from "./settings.module.css";
 
 interface APIKeyItem {
   key_id: string;
   merchant_id: string;
   name: string;
+  environment: string;
   key_prefix: string;
   created_at: string;
   last_used_at: string | null;
@@ -26,1053 +22,402 @@ interface RevealedKey {
   key_id: string;
   key: string;
   name: string;
-  prefix: string;
+  environment: string;
+  key_prefix: string;
 }
 
 export default function SettingsPage() {
-  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean | null>(null);
-  const [adminTokenInput, setAdminTokenInput] = useState<string>("");
-  const [loginError, setLoginError] = useState<string | null>(null);
-  const [isLoggingIn, setIsLoggingIn] = useState<boolean>(false);
-
-  const [merchants, setMerchants] = useState<Merchant[]>([]);
-  const [selectedMerchantId, setSelectedMerchantId] = useState<string>("");
+  const { user } = useAuth();
   const [keys, setKeys] = useState<APIKeyItem[]>([]);
-  const [isLoadingKeys, setIsLoadingKeys] = useState<boolean>(false);
+  const [loadingKeys, setLoadingKeys] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Modals and dialogs
+  // Creation modal state
   const [showCreateModal, setShowCreateModal] = useState<boolean>(false);
   const [newKeyName, setNewKeyName] = useState<string>("");
-  const [isCreatingKey, setIsCreatingKey] = useState<boolean>(false);
+  const [newKeyEnv, setNewKeyEnv] = useState<string>("live");
+  const [creatingKey, setCreatingKey] = useState<boolean>(false);
   const [revealedKey, setRevealedKey] = useState<RevealedKey | null>(null);
   const [copiedKey, setCopiedKey] = useState<boolean>(false);
 
-  // Confirmations
+  // Confirmation dialogs
   const [confirmRevokeKeyId, setConfirmRevokeKeyId] = useState<string | null>(null);
   const [confirmRotateKeyId, setConfirmRotateKeyId] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState<boolean>(false);
 
-  const baseUrl = process.env.NEXT_PUBLIC_RETURNGUARD_API_URL || "";
+  const baseUrl = process.env.NEXT_PUBLIC_RETURNGUARD_API_URL || "http://127.0.0.1:8000";
 
-  // Check admin session on load
-  const checkSession = useCallback(async () => {
+  const fetchKeys = useCallback(async () => {
+    setLoadingKeys(true);
+    setError(null);
     try {
-      const res = await fetch(`${baseUrl}/v1/admin/session`, {
+      const res = await fetch(`${baseUrl}/v1/merchant/api-keys`, {
         method: "GET",
         credentials: "include",
       });
       if (res.ok) {
-        setIsAdminAuthenticated(true);
-      } else {
-        setIsAdminAuthenticated(false);
-      }
-    } catch {
-      setIsAdminAuthenticated(false);
-    }
-  }, [baseUrl]);
-
-  useEffect(() => {
-    checkSession();
-  }, [checkSession]);
-
-  // Load merchants once authenticated
-  const fetchMerchants = useCallback(async () => {
-    try {
-      const res = await fetch(`${baseUrl}/v1/admin/merchants`, {
-        method: "GET",
-        credentials: "include",
-      });
-      if (res.ok) {
-        const data: Merchant[] = await res.json();
-        setMerchants(data);
-        if (data.length > 0) {
-          setSelectedMerchantId((prev) => prev || data[0].id);
-        }
-      }
-    } catch (err) {
-      console.error("Failed to load merchants", err);
-    }
-  }, [baseUrl]);
-
-  useEffect(() => {
-    if (isAdminAuthenticated) {
-      fetchMerchants();
-    }
-  }, [isAdminAuthenticated, fetchMerchants]);
-
-  // Load keys for selected merchant
-  const fetchKeys = useCallback(async (merchantId: string) => {
-    if (!merchantId) return;
-    setIsLoadingKeys(true);
-    setActionError(null);
-    try {
-      const res = await fetch(`${baseUrl}/v1/admin/merchants/${merchantId}/api-keys`, {
-        method: "GET",
-        credentials: "include",
-      });
-      if (res.ok) {
-        const data: APIKeyItem[] = await res.json();
+        const data = await res.json();
         setKeys(data);
       } else {
-        setActionError("Failed to load keys for selected merchant.");
+        const err = await res.json().catch(() => ({}));
+        setError(err.detail || "Failed to load API keys.");
       }
     } catch {
-      setActionError("Network error while loading keys.");
+      setError("Network error while connecting to ReturnGuard API.");
     } finally {
-      setIsLoadingKeys(false);
+      setLoadingKeys(false);
     }
   }, [baseUrl]);
 
   useEffect(() => {
-    if (isAdminAuthenticated && selectedMerchantId) {
-      fetchKeys(selectedMerchantId);
+    if (user) {
+      fetchKeys();
     }
-  }, [isAdminAuthenticated, selectedMerchantId, fetchKeys]);
+  }, [user, fetchKeys]);
 
-  // Admin login handler
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!adminTokenInput.trim()) return;
-    setIsLoggingIn(true);
-    setLoginError(null);
-
-    try {
-      const res = await fetch(`${baseUrl}/v1/admin/session`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ token: adminTokenInput.trim() }),
-      });
-
-      if (res.ok) {
-        setIsAdminAuthenticated(true);
-        setAdminTokenInput(""); // Never retain token
-      } else if (res.status === 429) {
-        const retryAfter = res.headers.get("Retry-After") || "60";
-        setLoginError(`Too many login attempts. Please try again in ${retryAfter} seconds.`);
-      } else if (res.status === 401) {
-        setLoginError("Invalid administrator credentials. Constant-time verification failed.");
-      } else if (res.status === 503) {
-        setLoginError("Admin access disabled. Set RG_ADMIN_TOKEN (>= 32 chars) in environment to enable.");
-      } else {
-        setLoginError(`Authentication failed with status ${res.status}.`);
-      }
-    } catch {
-      setLoginError("Unable to reach the ReturnGuard API. Check that the service is running.");
-    } finally {
-      setIsLoggingIn(false);
-    }
-  };
-
-  // Admin logout handler
-  const handleLogout = async () => {
-    try {
-      await fetch(`${baseUrl}/v1/admin/session`, {
-        method: "DELETE",
-        credentials: "include",
-      });
-    } catch {
-      // Ignore
-    }
-    setIsAdminAuthenticated(false);
-    setKeys([]);
-    setMerchants([]);
-  };
-
-  // Create API Key
   const handleCreateKey = async (e: React.FormEvent) => {
     e.preventDefault();
-    const targetMerchantId = selectedMerchantId || (merchants.length > 0 ? merchants[0].id : "");
-    if (!newKeyName.trim() || !targetMerchantId) return;
-    setIsCreatingKey(true);
-    setActionError(null);
+    if (!newKeyName.trim()) return;
 
+    setCreatingKey(true);
     try {
-      const res = await fetch(`${baseUrl}/v1/admin/merchants/${targetMerchantId}/api-keys`, {
+      const res = await fetch(`${baseUrl}/v1/merchant/api-keys`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ name: newKeyName.trim() }),
+        body: JSON.stringify({
+          name: newKeyName.trim(),
+          environment: newKeyEnv,
+        }),
       });
 
       if (res.ok) {
         const data = await res.json();
-        setRevealedKey({
-          key_id: data.key_id,
-          key: data.key,
-          name: data.name,
-          prefix: data.key_prefix,
-        });
+        setRevealedKey(data);
         setShowCreateModal(false);
         setNewKeyName("");
-        fetchKeys(targetMerchantId);
+        fetchKeys();
       } else {
         const err = await res.json().catch(() => ({}));
-        setActionError(err.detail || "Failed to create API key.");
+        setError(err.detail || "Failed to generate API key.");
       }
     } catch {
-      setActionError("Network error while creating key.");
+      setError("Network error while creating API key.");
     } finally {
-      setIsCreatingKey(false);
+      setCreatingKey(false);
     }
   };
 
-  // Revoke Key
-  const handleRevoke = async (keyId: string) => {
-    setActionError(null);
+  const handleRevokeKey = async (keyId: string) => {
+    setActionLoading(true);
     try {
-      const res = await fetch(`${baseUrl}/v1/admin/api-keys/${keyId}/revoke`, {
+      const res = await fetch(`${baseUrl}/v1/merchant/api-keys/${keyId}/revoke`, {
         method: "POST",
         credentials: "include",
       });
       if (res.ok) {
         setConfirmRevokeKeyId(null);
-        fetchKeys(selectedMerchantId);
+        fetchKeys();
       } else {
-        setActionError("Failed to revoke key.");
+        const err = await res.json().catch(() => ({}));
+        setError(err.detail || "Failed to revoke API key.");
       }
     } catch {
-      setActionError("Network error while revoking key.");
+      setError("Network error while revoking API key.");
+    } finally {
+      setActionLoading(false);
     }
   };
 
-  // Rotate Key
-  const handleRotate = async (keyId: string) => {
-    setActionError(null);
+  const handleRotateKey = async (keyId: string) => {
+    setActionLoading(true);
     try {
-      const res = await fetch(`${baseUrl}/v1/admin/api-keys/${keyId}/rotate`, {
+      const res = await fetch(`${baseUrl}/v1/merchant/api-keys/${keyId}/rotate`, {
         method: "POST",
         credentials: "include",
       });
       if (res.ok) {
         const data = await res.json();
+        setRevealedKey(data);
         setConfirmRotateKeyId(null);
-        setRevealedKey({
-          key_id: data.key_id,
-          key: data.key,
-          name: data.name,
-          prefix: data.key_prefix,
-        });
-        fetchKeys(selectedMerchantId);
+        fetchKeys();
       } else {
-        setActionError("Failed to rotate key.");
+        const err = await res.json().catch(() => ({}));
+        setError(err.detail || "Failed to rotate API key.");
       }
     } catch {
-      setActionError("Network error while rotating key.");
+      setError("Network error while rotating API key.");
+    } finally {
+      setActionLoading(false);
     }
   };
 
-  const copyToClipboard = (text: string) => {
-    if (typeof navigator !== "undefined" && navigator.clipboard) {
-      navigator.clipboard.writeText(text);
-      setCopiedKey(true);
-      setTimeout(() => setCopiedKey(false), 2500);
-    }
+  const handleCopy = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedKey(true);
+    setTimeout(() => setCopiedKey(false), 2000);
   };
-
-  const selectedMerchant = merchants.find((m) => m.id === selectedMerchantId);
 
   return (
-    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: "var(--rg-bg-canvas)" }}>
-      <Navbar currentPath="/settings" />
-
-      <main style={{ flex: 1, padding: "40px 24px" }}>
-        <div className="rg-landing-container" style={{ maxWidth: "1080px" }}>
-          {/* Header */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "32px", flexWrap: "wrap", gap: "16px" }}>
+    <ProtectedRoute>
+      <div className={styles.settingsWrapper}>
+        <Navbar currentPath="/settings" />
+        <main className={styles.mainContainer}>
+          {/* Header section */}
+          <div className={styles.header}>
             <div>
-              <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "6px" }}>
-                <h1 style={{ fontSize: "28px", fontWeight: 800, color: "var(--rg-text-primary)" }}>
-                  Key Management &amp; Settings
-                </h1>
-                <span
-                  style={{
-                    fontSize: "11px",
-                    fontWeight: 700,
-                    padding: "3px 8px",
-                    borderRadius: "999px",
-                    background: "#f0ede4",
-                    border: "1px solid var(--rg-border-card)",
-                    color: "var(--rg-text-secondary)",
-                  }}
-                >
-                  ADMIN CONSOLE
-                </span>
+              <div className={styles.orgBadge}>
+                Organization: <strong>{user?.merchant_name}</strong> ({user?.merchant_id})
               </div>
-              <p style={{ fontSize: "14.5px", color: "var(--rg-text-secondary)", margin: 0 }}>
-                Provision, inspect, rotate, and revoke merchant API keys with zero plaintext persistence.
+              <h1 className={styles.title}>API Key Credentials</h1>
+              <p className={styles.subtitle}>
+                Manage high-entropy Bearer credentials for server-to-server risk evaluations with ReturnGuard.
               </p>
             </div>
-
-            {isAdminAuthenticated && (
-              <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-                <Link
-                  href="/docs/integrate"
-                  style={{
-                    padding: "8px 16px",
-                    borderRadius: "8px",
-                    background: "#ffffff",
-                    border: "1px solid var(--rg-border-card)",
-                    fontSize: "13.5px",
-                    fontWeight: 600,
-                    color: "var(--rg-text-primary)",
-                  }}
-                >
-                  Integration Guide →
-                </Link>
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  style={{
-                    padding: "8px 16px",
-                    borderRadius: "8px",
-                    background: "#fee2e2",
-                    border: "1px solid #fca5a5",
-                    fontSize: "13.5px",
-                    fontWeight: 600,
-                    color: "#991b1b",
-                    cursor: "pointer",
-                  }}
-                >
-                  End Admin Session
-                </button>
-              </div>
-            )}
+            <button
+              type="button"
+              className={styles.createBtn}
+              onClick={() => setShowCreateModal(true)}
+            >
+              + Create New API Key
+            </button>
           </div>
 
-          {/* ADMIN LOGIN FORM (IF NOT AUTHENTICATED) */}
-          {isAdminAuthenticated === false && (
-            <div
-              className="rg-card"
-              style={{
-                maxWidth: "520px",
-                margin: "40px auto",
-                padding: "36px",
-                background: "#ffffff",
-                boxShadow: "var(--rg-shadow-lg)",
-              }}
-            >
-              <div style={{ textAlign: "center", marginBottom: "28px" }}>
-                <div
-                  style={{
-                    width: "48px",
-                    height: "48px",
-                    borderRadius: "14px",
-                    background: "#18181b",
-                    color: "#ffffff",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    margin: "0 auto 16px auto",
-                  }}
+          {error && <div className={styles.errorBanner}>{error}</div>}
+
+          {/* Keys Table Container */}
+          <div className={styles.tableCard}>
+            {loadingKeys ? (
+              <div className={styles.emptyState}>Loading organization credentials...</div>
+            ) : keys.length === 0 ? (
+              <div className={styles.emptyState}>
+                <h3>No API Keys Generated</h3>
+                <p>Create an API key to connect your payment pipeline or e-commerce store.</p>
+                <button
+                  type="button"
+                  className={styles.createBtn}
+                  style={{ marginTop: "16px" }}
+                  onClick={() => setShowCreateModal(true)}
                 >
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                  </svg>
-                </div>
-                <h2 style={{ fontSize: "22px", fontWeight: 800, marginBottom: "8px" }}>
-                  Administrator Authentication
-                </h2>
-                <p style={{ fontSize: "14px", color: "var(--rg-text-secondary)", lineHeight: 1.5 }}>
-                  Enter your server <code style={{ fontFamily: "monospace" }}>RG_ADMIN_TOKEN</code> to access key management. Authentication sets an HTTP-only SameSite cookie.
-                </p>
+                  Create API Key
+                </button>
               </div>
+            ) : (
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th>Key Name</th>
+                    <th>Environment</th>
+                    <th>Key Prefix</th>
+                    <th>Created</th>
+                    <th>Status</th>
+                    <th style={{ textAlign: "right" }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {keys.map((k) => (
+                    <tr key={k.key_id}>
+                      <td style={{ fontWeight: 600 }}>{k.name}</td>
+                      <td>
+                        <span className={k.environment === "live" ? styles.badgeLive : styles.badgeTest}>
+                          {k.environment}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={styles.monoPrefix}>{k.key_prefix}</span>
+                      </td>
+                      <td>{new Date(k.created_at).toLocaleDateString()}</td>
+                      <td>
+                        {k.is_active ? (
+                          <span className={styles.statusActive}>● Active</span>
+                        ) : (
+                          <span className={styles.statusRevoked}>● Revoked</span>
+                        )}
+                      </td>
+                      <td style={{ textAlign: "right" }}>
+                        {k.is_active && (
+                          <div style={{ display: "inline-flex", gap: "8px" }}>
+                            <button
+                              type="button"
+                              className={styles.actionBtn}
+                              onClick={() => setConfirmRotateKeyId(k.key_id)}
+                            >
+                              Rotate
+                            </button>
+                            <button
+                              type="button"
+                              className={styles.revokeBtn}
+                              onClick={() => setConfirmRevokeKeyId(k.key_id)}
+                            >
+                              Revoke
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </main>
 
-              {loginError && (
-                <div
-                  style={{
-                    padding: "12px 16px",
-                    borderRadius: "10px",
-                    background: "#fee2e2",
-                    border: "1px solid #fca5a5",
-                    color: "#991b1b",
-                    fontSize: "13.5px",
-                    marginBottom: "20px",
-                    lineHeight: 1.5,
-                  }}
-                >
-                  {loginError}
-                </div>
-              )}
-
-              <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+        {/* Modal: Create API Key */}
+        {showCreateModal && (
+          <div className={styles.modalOverlay}>
+            <div className={styles.modalCard}>
+              <h3 className={styles.modalTitle}>Create New API Key</h3>
+              <p className={styles.modalSubtitle}>
+                This key will be scoped strictly to <strong>{user?.merchant_name}</strong>.
+              </p>
+              <form onSubmit={handleCreateKey} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
                 <div>
-                  <label
-                    htmlFor="admin-token"
-                    style={{ display: "block", fontSize: "13px", fontWeight: 700, marginBottom: "6px", color: "var(--rg-text-primary)" }}
-                  >
-                    Admin Secret Token
-                  </label>
+                  <label className={styles.modalLabel}>Key Name / Description</label>
                   <input
-                    id="admin-token"
-                    type="password"
-                    placeholder="Enter RG_ADMIN_TOKEN..."
-                    value={adminTokenInput}
-                    onChange={(e) => setAdminTokenInput(e.target.value)}
+                    type="text"
                     required
-                    style={{
-                      width: "100%",
-                      padding: "11px 14px",
-                      borderRadius: "10px",
-                      border: "1px solid var(--rg-border-card)",
-                      fontSize: "14px",
-                      fontFamily: "monospace",
-                      boxSizing: "border-box",
-                      outline: "none",
-                    }}
+                    className={styles.modalInput}
+                    placeholder="e.g. Production ShopPoint Gateway"
+                    value={newKeyName}
+                    onChange={(e) => setNewKeyName(e.target.value)}
                   />
                 </div>
-
-                <button
-                  type="submit"
-                  disabled={isLoggingIn}
-                  className="rg-cta-button"
-                  style={{
-                    width: "100%",
-                    justifyContent: "center",
-                    padding: "12px",
-                    fontSize: "15px",
-                    cursor: isLoggingIn ? "not-allowed" : "pointer",
-                    opacity: isLoggingIn ? 0.7 : 1,
-                  }}
-                >
-                  {isLoggingIn ? "Verifying..." : "Authenticate Session"}
-                </button>
-              </form>
-
-              <div style={{ marginTop: "20px", fontSize: "12px", color: "var(--rg-text-muted)", textAlign: "center", lineHeight: 1.5 }}>
-                Protected by sliding-window rate limiting (5 attempts/min).
-              </div>
-            </div>
-          )}
-
-          {/* AUTHENTICATED KEY MANAGEMENT VIEW */}
-          {isAdminAuthenticated && (
-            <div>
-              {actionError && (
-                <div
-                  style={{
-                    padding: "12px 16px",
-                    borderRadius: "10px",
-                    background: "#fee2e2",
-                    border: "1px solid #fca5a5",
-                    color: "#991b1b",
-                    fontSize: "13.5px",
-                    marginBottom: "24px",
-                  }}
-                >
-                  {actionError}
-                </div>
-              )}
-
-              {/* Merchant Summary Bar (Inspired by Butler UI) */}
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-                  gap: "20px",
-                  marginBottom: "28px",
-                }}
-              >
-                {/* Merchant Selector Card */}
-                <div className="rg-card" style={{ background: "#ffffff", padding: "20px" }}>
-                  <div style={{ fontSize: "12.5px", fontWeight: 700, color: "var(--rg-text-muted)", textTransform: "uppercase", marginBottom: "8px" }}>
-                    Select Merchant Tenant
-                  </div>
+                <div>
+                  <label className={styles.modalLabel}>Environment</label>
                   <select
-                    value={selectedMerchantId}
-                    onChange={(e) => setSelectedMerchantId(e.target.value)}
-                    style={{
-                      width: "100%",
-                      padding: "10px 14px",
-                      borderRadius: "8px",
-                      border: "1px solid var(--rg-border-card)",
-                      fontSize: "14px",
-                      fontWeight: 600,
-                      background: "#faf9f6",
-                      color: "var(--rg-text-primary)",
-                      outline: "none",
-                      cursor: "pointer",
-                    }}
+                    className={styles.modalInput}
+                    value={newKeyEnv}
+                    onChange={(e) => setNewKeyEnv(e.target.value)}
                   >
-                    {merchants.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.name} ({m.id})
-                      </option>
-                    ))}
+                    <option value="live">Live (rg_live_...)</option>
+                    <option value="test">Test (rg_test_...)</option>
                   </select>
                 </div>
-
-                {/* Tenant ID Quick Card */}
-                {selectedMerchant && (
-                  <div className="rg-card" style={{ background: "#ffffff", padding: "20px" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                      <span style={{ fontSize: "12.5px", fontWeight: 700, color: "var(--rg-text-muted)", textTransform: "uppercase" }}>
-                        Merchant ID
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => copyToClipboard(selectedMerchant.id)}
-                        style={{
-                          background: "transparent",
-                          border: "none",
-                          fontSize: "12px",
-                          fontWeight: 600,
-                          color: "#2563eb",
-                          cursor: "pointer",
-                        }}
-                      >
-                        Copy ID
-                      </button>
-                    </div>
-                    <div style={{ fontFamily: "monospace", fontSize: "15px", fontWeight: 700, color: "var(--rg-text-primary)" }}>
-                      {selectedMerchant.id}
-                    </div>
-                    <div style={{ fontSize: "12px", color: "var(--rg-text-muted)", marginTop: "4px" }}>
-                      Contact: {selectedMerchant.email}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* API Keys Table & Actions */}
-              <div
-                className="rg-card"
-                style={{
-                  padding: 0,
-                  overflow: "hidden",
-                  background: "#ffffff",
-                }}
-              >
-                {/* Header within card */}
-                <div
-                  style={{
-                    padding: "20px 24px",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    borderBottom: "1px solid var(--rg-border-card)",
-                    background: "#faf9f6",
-                    flexWrap: "wrap",
-                    gap: "12px",
-                  }}
-                >
-                  <div>
-                    <h3 style={{ fontSize: "17px", fontWeight: 800, margin: 0 }}>
-                      Active &amp; Historical API Keys
-                    </h3>
-                    <div style={{ fontSize: "12.5px", color: "var(--rg-text-muted)", marginTop: "2px" }}>
-                      Only prefix &amp; SHA-256 hashes are stored. Plaintext keys are never viewable after initial creation.
-                    </div>
-                  </div>
-
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "12px" }}>
                   <button
                     type="button"
-                    onClick={() => setShowCreateModal(true)}
-                    className="rg-cta-button"
-                    style={{ padding: "8px 16px", fontSize: "13.5px" }}
-                  >
-                    <span>+ Generate API Key</span>
-                  </button>
-                </div>
-
-                {/* Table */}
-                {isLoadingKeys ? (
-                  <div style={{ padding: "40px", textAlign: "center", color: "var(--rg-text-muted)", fontSize: "14px" }}>
-                    Loading keys...
-                  </div>
-                ) : keys.length === 0 ? (
-                  <div style={{ padding: "48px 24px", textAlign: "center" }}>
-                    <div style={{ fontSize: "15px", fontWeight: 700, marginBottom: "6px" }}>No API Keys Generated Yet</div>
-                    <p style={{ fontSize: "13.5px", color: "var(--rg-text-secondary)", marginBottom: "16px" }}>
-                      Generate an API key for {selectedMerchant?.name || "this merchant"} to begin scoring transactions.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => setShowCreateModal(true)}
-                      className="rg-cta-button"
-                      style={{ padding: "8px 18px", fontSize: "13.5px" }}
-                    >
-                      Create First Key
-                    </button>
-                  </div>
-                ) : (
-                  <div style={{ overflowX: "auto" }}>
-                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13.5px", textAlign: "left" }}>
-                      <thead>
-                        <tr style={{ background: "#f8f7f2", borderBottom: "1px solid var(--rg-border-card)" }}>
-                          <th style={{ padding: "12px 18px", fontWeight: 700 }}>Label</th>
-                          <th style={{ padding: "12px 18px", fontWeight: 700 }}>Key Prefix</th>
-                          <th style={{ padding: "12px 18px", fontWeight: 700 }}>Created</th>
-                          <th style={{ padding: "12px 18px", fontWeight: 700 }}>Status</th>
-                          <th style={{ padding: "12px 18px", fontWeight: 700, textAlign: "right" }}>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {keys.map((k) => (
-                          <tr key={k.key_id} style={{ borderBottom: "1px solid var(--rg-border-card)" }}>
-                            <td style={{ padding: "14px 18px", fontWeight: 600 }}>
-                              {k.name}
-                              <div style={{ fontSize: "11px", color: "var(--rg-text-muted)", fontFamily: "monospace" }}>
-                                {k.key_id}
-                              </div>
-                            </td>
-                            <td style={{ padding: "14px 18px", fontFamily: "monospace", color: "var(--rg-text-secondary)" }}>
-                              {k.key_prefix}
-                            </td>
-                            <td style={{ padding: "14px 18px", color: "var(--rg-text-secondary)", fontSize: "13px" }}>
-                              {new Date(k.created_at).toLocaleDateString()}
-                            </td>
-                            <td style={{ padding: "14px 18px" }}>
-                              {k.is_active ? (
-                                <span
-                                  style={{
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    gap: "6px",
-                                    padding: "3px 9px",
-                                    borderRadius: "999px",
-                                    background: "#dcfce7",
-                                    color: "#166534",
-                                    fontSize: "12px",
-                                    fontWeight: 700,
-                                  }}
-                                >
-                                  <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#166534" }} />
-                                  Active
-                                </span>
-                              ) : (
-                                <span
-                                  style={{
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    gap: "6px",
-                                    padding: "3px 9px",
-                                    borderRadius: "999px",
-                                    background: "#fee2e2",
-                                    color: "#991b1b",
-                                    fontSize: "12px",
-                                    fontWeight: 700,
-                                  }}
-                                >
-                                  <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#dc2626" }} />
-                                  Revoked
-                                </span>
-                              )}
-                            </td>
-                            <td style={{ padding: "14px 18px", textAlign: "right" }}>
-                              {k.is_active ? (
-                                <div style={{ display: "inline-flex", gap: "8px" }}>
-                                  <button
-                                    type="button"
-                                    onClick={() => setConfirmRotateKeyId(k.key_id)}
-                                    style={{
-                                      padding: "6px 12px",
-                                      borderRadius: "6px",
-                                      background: "#f0ede4",
-                                      border: "1px solid var(--rg-border-card)",
-                                      fontSize: "12.5px",
-                                      fontWeight: 600,
-                                      cursor: "pointer",
-                                    }}
-                                  >
-                                    Rotate
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setConfirmRevokeKeyId(k.key_id)}
-                                    style={{
-                                      padding: "6px 12px",
-                                      borderRadius: "6px",
-                                      background: "#fee2e2",
-                                      border: "1px solid #fca5a5",
-                                      fontSize: "12.5px",
-                                      fontWeight: 600,
-                                      color: "#991b1b",
-                                      cursor: "pointer",
-                                    }}
-                                  >
-                                    Revoke
-                                  </button>
-                                </div>
-                              ) : (
-                                <span style={{ fontSize: "12px", color: "var(--rg-text-muted)" }}>Revoked</span>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-
-                {/* Pagination footer (Butler UI style) */}
-                <div
-                  style={{
-                    padding: "12px 20px",
-                    display: "flex",
-                    justifyContent: "flex-end",
-                    alignItems: "center",
-                    gap: "12px",
-                    fontSize: "12.5px",
-                    color: "var(--rg-text-muted)",
-                    background: "#faf9f6",
-                    borderTop: "1px solid var(--rg-border-card)",
-                  }}
-                >
-                  <span>1-{keys.length} of {keys.length}</span>
-                  <div style={{ display: "flex", gap: "4px" }}>
-                    <button type="button" disabled style={{ padding: "4px 8px", borderRadius: "4px", border: "1px solid var(--rg-border-card)", background: "#ffffff", opacity: 0.5, cursor: "not-allowed" }}>‹</button>
-                    <button type="button" disabled style={{ padding: "4px 8px", borderRadius: "4px", border: "1px solid var(--rg-border-card)", background: "#ffffff", opacity: 0.5, cursor: "not-allowed" }}>›</button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* CREATE KEY MODAL */}
-          {showCreateModal && (
-            <div
-              style={{
-                position: "fixed",
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                backgroundColor: "rgba(0, 0, 0, 0.45)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                zIndex: 200,
-                padding: "20px",
-              }}
-            >
-              <div
-                className="rg-card"
-                style={{
-                  width: "100%",
-                  maxWidth: "460px",
-                  background: "#ffffff",
-                  padding: "28px",
-                  boxShadow: "var(--rg-shadow-lg)",
-                }}
-              >
-                <h3 style={{ fontSize: "20px", fontWeight: 800, marginBottom: "8px" }}>
-                  Generate New API Key
-                </h3>
-                <p style={{ fontSize: "13.5px", color: "var(--rg-text-secondary)", marginBottom: "20px", lineHeight: 1.5 }}>
-                  Provision an API key for <strong style={{ color: "var(--rg-text-primary)" }}>{selectedMerchant?.name}</strong>. The plaintext key will be shown strictly once.
-                </p>
-
-                <form onSubmit={handleCreateKey}>
-                  <div style={{ marginBottom: "20px" }}>
-                    <label
-                      htmlFor="key-label"
-                      style={{ display: "block", fontSize: "13px", fontWeight: 700, marginBottom: "6px" }}
-                    >
-                      Key Label / Description
-                    </label>
-                    <input
-                      id="key-label"
-                      type="text"
-                      placeholder="e.g. Production Shopify Checkout"
-                      value={newKeyName}
-                      onChange={(e) => setNewKeyName(e.target.value)}
-                      required
-                      style={{
-                        width: "100%",
-                        padding: "10px 14px",
-                        borderRadius: "8px",
-                        border: "1px solid var(--rg-border-card)",
-                        fontSize: "14px",
-                        boxSizing: "border-box",
-                        outline: "none",
-                      }}
-                    />
-                  </div>
-
-                  <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
-                    <button
-                      type="button"
-                      onClick={() => setShowCreateModal(false)}
-                      style={{
-                        padding: "8px 16px",
-                        borderRadius: "8px",
-                        border: "1px solid var(--rg-border-card)",
-                        background: "#ffffff",
-                        fontSize: "13.5px",
-                        fontWeight: 600,
-                        cursor: "pointer",
-                      }}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={isCreatingKey}
-                      className="rg-cta-button"
-                      style={{ padding: "8px 18px", fontSize: "13.5px" }}
-                    >
-                      {isCreatingKey ? "Generating..." : "Generate Key"}
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          )}
-
-          {/* ONE-TIME KEY REVEAL MODAL */}
-          {revealedKey && (
-            <div
-              style={{
-                position: "fixed",
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                backgroundColor: "rgba(0, 0, 0, 0.6)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                zIndex: 300,
-                padding: "20px",
-              }}
-            >
-              <div
-                className="rg-card"
-                style={{
-                  width: "100%",
-                  maxWidth: "540px",
-                  background: "#ffffff",
-                  padding: "32px",
-                  boxShadow: "var(--rg-shadow-lg)",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px" }}>
-                  <div
-                    style={{
-                      width: "36px",
-                      height: "36px",
-                      borderRadius: "50%",
-                      background: "#dcfce7",
-                      color: "#166534",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontWeight: 800,
-                      fontSize: "18px",
-                    }}
-                  >
-                    ✓
-                  </div>
-                  <div>
-                    <h3 style={{ fontSize: "20px", fontWeight: 800, margin: 0 }}>API Key Generated</h3>
-                    <div style={{ fontSize: "13px", color: "var(--rg-text-muted)" }}>Label: {revealedKey.name}</div>
-                  </div>
-                </div>
-
-                {/* Explicit Security Warning Banner */}
-                <div
-                  style={{
-                    padding: "14px 18px",
-                    borderRadius: "10px",
-                    background: "#fffbeb",
-                    border: "1px solid #fef3c7",
-                    color: "#92400e",
-                    fontSize: "13.5px",
-                    lineHeight: 1.55,
-                    marginBottom: "20px",
-                  }}
-                >
-                  <strong>Copy this key now.</strong> You will not be able to see it again. Never commit it to version control or bundle it in client code.
-                </div>
-
-                {/* Key Display & Copy Button */}
-                <div
-                  style={{
-                    background: "#18181b",
-                    color: "#60a5fa",
-                    padding: "16px",
-                    borderRadius: "10px",
-                    fontFamily: "monospace",
-                    fontSize: "13.5px",
-                    wordBreak: "break-all",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    gap: "12px",
-                    marginBottom: "24px",
-                  }}
-                >
-                  <span>{revealedKey.key}</span>
-                  <button
-                    type="button"
-                    onClick={() => copyToClipboard(revealedKey.key)}
-                    style={{
-                      padding: "6px 12px",
-                      borderRadius: "6px",
-                      background: copiedKey ? "#166534" : "#2563eb",
-                      color: "#ffffff",
-                      border: "none",
-                      fontSize: "12px",
-                      fontWeight: 700,
-                      cursor: "pointer",
-                      flexShrink: 0,
-                    }}
-                  >
-                    {copiedKey ? "Copied!" : "Copy Key"}
-                  </button>
-                </div>
-
-                <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setRevealedKey(null);
-                      setCopiedKey(false);
-                    }}
-                    className="rg-cta-button"
-                    style={{ padding: "9px 24px" }}
-                  >
-                    I have safely copied my key
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* CONFIRM REVOKE DIALOG */}
-          {confirmRevokeKeyId && (
-            <div
-              style={{
-                position: "fixed",
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                backgroundColor: "rgba(0, 0, 0, 0.45)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                zIndex: 200,
-                padding: "20px",
-              }}
-            >
-              <div
-                className="rg-card"
-                style={{
-                  width: "100%",
-                  maxWidth: "440px",
-                  background: "#ffffff",
-                  padding: "28px",
-                }}
-              >
-                <h3 style={{ fontSize: "19px", fontWeight: 800, marginBottom: "12px", color: "#dc2626" }}>
-                  Revoke API Key?
-                </h3>
-                <p style={{ fontSize: "14px", color: "var(--rg-text-secondary)", lineHeight: 1.5, marginBottom: "20px" }}>
-                  Revoking this key immediately blocks all score requests using it. This cannot be undone.
-                </p>
-                <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
-                  <button
-                    type="button"
-                    onClick={() => setConfirmRevokeKeyId(null)}
-                    style={{
-                      padding: "8px 16px",
-                      borderRadius: "8px",
-                      border: "1px solid var(--rg-border-card)",
-                      background: "#ffffff",
-                      fontSize: "13.5px",
-                      fontWeight: 600,
-                      cursor: "pointer",
-                    }}
+                    className={styles.cancelBtn}
+                    onClick={() => setShowCreateModal(false)}
                   >
                     Cancel
                   </button>
                   <button
-                    type="button"
-                    onClick={() => handleRevoke(confirmRevokeKeyId)}
-                    style={{
-                      padding: "8px 18px",
-                      borderRadius: "8px",
-                      background: "#dc2626",
-                      color: "#ffffff",
-                      border: "none",
-                      fontSize: "13.5px",
-                      fontWeight: 600,
-                      cursor: "pointer",
-                    }}
+                    type="submit"
+                    disabled={creatingKey}
+                    className={styles.createBtn}
                   >
-                    Revoke Immediately
+                    {creatingKey ? "Generating..." : "Generate Secret Key"}
                   </button>
                 </div>
-              </div>
+              </form>
             </div>
-          )}
+          </div>
+        )}
 
-          {/* CONFIRM ROTATE DIALOG */}
-          {confirmRotateKeyId && (
-            <div
-              style={{
-                position: "fixed",
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                backgroundColor: "rgba(0, 0, 0, 0.45)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                zIndex: 200,
-                padding: "20px",
-              }}
-            >
-              <div
-                className="rg-card"
-                style={{
-                  width: "100%",
-                  maxWidth: "440px",
-                  background: "#ffffff",
-                  padding: "28px",
-                }}
-              >
-                <h3 style={{ fontSize: "19px", fontWeight: 800, marginBottom: "12px", color: "var(--rg-text-primary)" }}>
-                  Rotate API Key?
-                </h3>
-                <p style={{ fontSize: "14px", color: "var(--rg-text-secondary)", lineHeight: 1.5, marginBottom: "20px" }}>
-                  Rotating creates a new key and immediately revokes the current one in a single atomic transaction.
-                </p>
-                <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+        {/* Modal: One-Time Key Reveal Dialog */}
+        {revealedKey && (
+          <div className={styles.modalOverlay}>
+            <div className={styles.modalCard} style={{ maxWidth: "560px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", color: "#10b981", marginBottom: "8px" }}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                  <polyline points="22 4 12 14.01 9 11.01" />
+                </svg>
+                <h3 className={styles.modalTitle} style={{ margin: 0 }}>API Key Generated Successfully</h3>
+              </div>
+              <div className={styles.warningBox}>
+                <strong>Important:</strong> This secret will never be displayed again. Please copy and store it in your backend environment variables immediately.
+              </div>
+              <div style={{ marginTop: "16px" }}>
+                <label className={styles.modalLabel}>{revealedKey.name} ({revealedKey.environment})</label>
+                <div className={styles.revealRow}>
+                  <input
+                    type="text"
+                    readOnly
+                    className={styles.revealInput}
+                    value={revealedKey.key}
+                  />
                   <button
                     type="button"
-                    onClick={() => setConfirmRotateKeyId(null)}
-                    style={{
-                      padding: "8px 16px",
-                      borderRadius: "8px",
-                      border: "1px solid var(--rg-border-card)",
-                      background: "#ffffff",
-                      fontSize: "13.5px",
-                      fontWeight: 600,
-                      cursor: "pointer",
-                    }}
+                    className={styles.copyBtn}
+                    onClick={() => handleCopy(revealedKey.key)}
                   >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleRotate(confirmRotateKeyId)}
-                    className="rg-cta-button"
-                    style={{ padding: "8px 18px", fontSize: "13.5px" }}
-                  >
-                    Rotate &amp; Generate New
+                    {copiedKey ? "Copied! ✓" : "Copy Secret"}
                   </button>
                 </div>
               </div>
+              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "24px" }}>
+                <button
+                  type="button"
+                  className={styles.createBtn}
+                  onClick={() => setRevealedKey(null)}
+                >
+                  I have saved this secret
+                </button>
+              </div>
             </div>
-          )}
-        </div>
-      </main>
-    </div>
+          </div>
+        )}
+
+        {/* Modal: Confirm Revoke */}
+        {confirmRevokeKeyId && (
+          <div className={styles.modalOverlay}>
+            <div className={styles.modalCard}>
+              <h3 className={styles.modalTitle} style={{ color: "#f87171" }}>Revoke API Key?</h3>
+              <p className={styles.modalSubtitle}>
+                Any server or client using this credential will immediately receive <strong>401 Unauthorized</strong>. This action is permanent and cannot be undone.
+              </p>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "20px" }}>
+                <button
+                  type="button"
+                  className={styles.cancelBtn}
+                  onClick={() => setConfirmRevokeKeyId(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={actionLoading}
+                  className={styles.revokeBtn}
+                  style={{ padding: "8px 16px" }}
+                  onClick={() => handleRevokeKey(confirmRevokeKeyId)}
+                >
+                  {actionLoading ? "Revoking..." : "Confirm Revocation"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal: Confirm Rotate */}
+        {confirmRotateKeyId && (
+          <div className={styles.modalOverlay}>
+            <div className={styles.modalCard}>
+              <h3 className={styles.modalTitle}>Rotate API Key?</h3>
+              <p className={styles.modalSubtitle}>
+                Rotating will atomically invalidate the current key and generate a fresh secret for the same name and organization.
+              </p>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "20px" }}>
+                <button
+                  type="button"
+                  className={styles.cancelBtn}
+                  onClick={() => setConfirmRotateKeyId(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={actionLoading}
+                  className={styles.createBtn}
+                  onClick={() => handleRotateKey(confirmRotateKeyId)}
+                >
+                  {actionLoading ? "Rotating..." : "Rotate Key Now"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </ProtectedRoute>
   );
 }

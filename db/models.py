@@ -699,3 +699,67 @@ class AuditScoreEvent(Base):
     )
 
     order = relationship("Order")
+
+
+class User(Base):
+    """SaaS User Account."""
+
+    __tablename__ = "users"
+
+    id = Column(String(64), primary_key=True)
+    merchant_id = Column(
+        String(64), ForeignKey("merchants.id"), nullable=False, index=True
+    )
+    email = Column(String(255), unique=True, nullable=False, index=True)
+    password_hash = Column(String(255), nullable=False)
+    full_name = Column(String(255), nullable=False)
+    role = Column(String(32), default="admin", nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.UTC),
+        nullable=False,
+    )
+
+    merchant = relationship("Merchant", backref="users")
+
+
+class UserSession(Base):
+    """Active server-side SaaS user sessions."""
+
+    __tablename__ = "user_sessions"
+
+    id = Column(String(64), primary_key=True)
+    user_id = Column(String(64), ForeignKey("users.id"), nullable=False, index=True)
+    merchant_id = Column(
+        String(64), ForeignKey("merchants.id"), nullable=False, index=True
+    )
+    expires_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.UTC),
+        nullable=False,
+    )
+
+    user = relationship("User")
+    merchant = relationship("Merchant")
+
+
+class SecurityAuditLog(Base):
+    """Immutable audit journal for authentication and credential lifecycle."""
+
+    __tablename__ = "security_audit_logs"
+
+    id = Column(String(64), primary_key=True)
+    event_type = Column(String(64), nullable=False, index=True)
+    actor_id = Column(String(64), nullable=True)
+    merchant_id = Column(String(64), nullable=False, index=True)
+    target_resource = Column(String(64), nullable=True)
+    ip_address = Column(String(64), nullable=True)
+    outcome = Column(String(32), nullable=False)
+    details_json = Column(Text, nullable=True)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.UTC),
+        nullable=False,
+    )
